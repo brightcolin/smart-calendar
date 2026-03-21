@@ -35,27 +35,49 @@ const AI = (() => {
     return d.choices?.[0]?.message?.content || '';
   }
 
-  /* ══ System prompt for task parsing ══ */
+  /* ══ System prompt ══ */
   function buildSystemPrompt() {
-    const cfg  = App.store.cfg;
+    const cfg   = App.store.cfg;
     const today = Cal.todayStr();
     const now   = new Date().toTimeString().slice(0, 5);
     const tz    = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    return `你是智能日历任务助手。今天是${today}，当前时间${now}，时区${tz}。
+
+    // Build next 14 days date list to help AI resolve relative dates
+    const dates = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(); d.setDate(d.getDate() + i);
+      const weekDay = ['日','一','二','三','四','五','六'][d.getDay()];
+      dates.push(d.toISOString().slice(0,10) + '(周' + weekDay + ')');
+    }
+
+    return `你是智能日历任务助手。今天是${today}(${['日','一','二','三','四','五','六'][new Date().getDay()]})，当前时间${now}，时区${tz}。
 工作时间${cfg.workStart||'09:00'}至${cfg.workEnd||'18:00'}，默认提前提醒${cfg.defReminder||10}分钟（${cfg.defReminderMethod||'popup'}方式）。
+未来14天日期参考：${dates.slice(0,7).join('，')}
+标签体系：学习|课程|科研|社工|运动|娱乐|工作|其他。标签在事件标题末尾用 #标签 标注（如"写周报 #工作"）。
 
-你有三种操作模式，只输出 JSON，不输出任何其他文字：
+只输出 JSON，不输出任何其他文字。有四种模式：
 
-【创建模式】信息足够时：
-{"action":"create","task":{"name":"任务名(30字内)","tag":"学习|课程|科研|社工|运动|娱乐|工作|其他","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","reminder":分钟数,"reminderMethod":"popup|email","description":"描述或空字符串"},"summary":"一句话确认"}
+【单个创建】信息足够创建一个事件时：
+{"action":"create","task":{"name":"任务名(30字内，不含#标签)","tag":"标签","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","reminder":分钟数,"reminderMethod":"popup|email","description":"备注或空"},"summary":"一句话确认"}
 
-【修改模式】用户要求修改/推迟/取消/标记完成已有任务时：
-{"action":"modify","intent":"reschedule|complete|delete|update","target":"任务名关键词","changes":{"start":"HH:MM(可选)","end":"HH:MM(可选)","date":"YYYY-MM-DD(可选)","description":"(可选)"},"summary":"一句话说明修改内容"}
+【批量创建】用户描述多个事件或周期性任务（如"持续五周每周五看电影"）时，生成独立事件列表，绝对不用重复规则：
+{"action":"batch_create","tasks":[{"name":"任务名","tag":"标签","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","reminder":分钟数,"reminderMethod":"popup|email","description":""},...更多事件],"summary":"共X个事件，描述安排"}
 
-【反问模式】信息不足时（只问最重要的一个问题）：
+【查询】用户询问已有安排（如"今天有什么""本周安排""明天几点有会"）时：
+{"action":"query","range":"today|tomorrow|this_week|date","date":"YYYY-MM-DD(range=date时必填)","summary":"简短说明正在查询什么"}
+
+【修改】用户要求修改/推迟/完成/删除已有任务时：
+{"action":"modify","intent":"reschedule|complete|delete|update","target":"任务名关键词","changes":{"start":"HH:MM","end":"HH:MM","date":"YYYY-MM-DD","description":""},"summary":"一句话说明"}
+
+【反问】信息不足时（一次只问一个最重要的问题）：
 {"action":"ask","question":"问题"}
 
-规则：tag自动判断；"明天"=明天日期；超出工作时间时在summary中提示；reminder没说用默认值；reminderMethod没说用默认值。`;
+规则：
+- 标签自动从内容判断，用户写了#标签则优先用用户写的
+- "明天""后天""下周五"等相对日期要转换为具体YYYY-MM-DD
+- 超出工作时间时在summary中提醒
+- reminder和reminderMethod没说时用默认值
+- 批量创建时每个事件都是独立的，有各自的具体日期`;
   }
 
   /* ══ Chat UI helpers ══ */
@@ -64,7 +86,7 @@ const AI = (() => {
     pendingTask = null;
     document.getElementById('chatArea').innerHTML = '';
     document.getElementById('confirmArea').innerHTML = '';
-    addAIBubble('你好！直接告诉我你要安排什么任务，或者修改已有安排。\n\n例如：\n「明天下午3点开会一小时，提前15分钟提醒」\n「把今天下午的会议推迟到4点」\n「标记写周报任务已完成」');
+    addAIBubble('你好！直接告诉我你要安排什么，或者查询已有日历安排。\n\n例如：\n「明天下午3点开会一小时 #工作」\n「持续五周，每周五晚上8点看电影两小时」\n「今天有什么安排？」\n「把今天下午的会议推迟到4点」');
   }
 
   function addAIBubble(text, thinking = false) {
@@ -96,18 +118,19 @@ const AI = (() => {
     return el;
   }
 
-  /* ══ Confirm card for CREATE ══ */
+  /* ══ Confirm card for single CREATE ══ */
   function showCreateConfirm(task) {
     pendingTask = { type: 'create', task };
     const cfg = App.store.cfg;
-    // Out-of-hours check
     const ooh = isOutOfHours(task.start, task.end);
+    // Preview title format
+    const titlePreview = task.name + (task.tag && task.tag !== '其他' ? ' #' + task.tag : '');
     const confirm = document.getElementById('confirmArea');
     confirm.innerHTML =
       '<div class="confirm-card">'
       + (ooh ? '<div class="ooh-banner">⚠ 该时间段超出工作时间 (' + cfg.workStart + '–' + cfg.workEnd + ')，确认继续？</div>' : '')
       + '<div class="confirm-title">请确认创建信息</div>'
-      + row('任务', esc(task.name))
+      + row('日历标题', '<span style="font-family:\'DM Mono\',monospace;font-size:12px;color:var(--accent)">' + esc(titlePreview) + '</span>')
       + row('类别', '<span class="badge badge-' + esc(task.tag) + '">' + esc(task.tag) + '</span>')
       + row('日期', esc(task.date))
       + row('时间', esc(task.start) + ' – ' + esc(task.end) + ' (' + Cal.calcMins(task.start, task.end) + '分钟)')
@@ -116,6 +139,30 @@ const AI = (() => {
       + '<div class="confirm-actions">'
       + '<button class="btn btn-primary" onclick="AI.confirmAction()">✓ 确认创建</button>'
       + '<button class="btn" onclick="AI.cancelConfirm()">修改</button>'
+      + '</div></div>';
+    confirm.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+
+  /* ══ Confirm card for BATCH CREATE ══ */
+  function showBatchConfirm(tasks, summary) {
+    pendingTask = { type: 'batch_create', tasks };
+    const confirm = document.getElementById('confirmArea');
+    // Show first 5, collapse rest
+    const preview = tasks.slice(0, 5);
+    const extra   = tasks.length - 5;
+    confirm.innerHTML =
+      '<div class="confirm-card">'
+      + '<div class="confirm-title">批量创建 ' + tasks.length + ' 个事件</div>'
+      + preview.map((t, i) =>
+          '<div class="confirm-row" style="flex-direction:column;align-items:flex-start;gap:2px">'
+          + '<span style="font-size:13px;font-weight:500">' + esc(i+1) + '. ' + esc(t.name) + (t.tag && t.tag !== '其他' ? ' <span class="badge badge-' + esc(t.tag) + '">' + esc(t.tag) + '</span>' : '') + '</span>'
+          + '<span style="font-size:12px;font-family:\'DM Mono\',monospace;color:var(--text2)">' + esc(t.date) + ' ' + esc(t.start) + '–' + esc(t.end) + '</span>'
+          + '</div>'
+        ).join('')
+      + (extra > 0 ? '<div style="font-size:12px;color:var(--text3);padding:6px 0">…还有 ' + extra + ' 个事件</div>' : '')
+      + '<div class="confirm-actions">'
+      + '<button class="btn btn-primary" onclick="AI.confirmAction()">✓ 全部创建</button>'
+      + '<button class="btn" onclick="AI.cancelConfirm()">取消</button>'
       + '</div></div>';
     confirm.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
@@ -153,6 +200,8 @@ const AI = (() => {
 
     if (pendingTask.type === 'create') {
       await executeCreate(pendingTask.task, btn);
+    } else if (pendingTask.type === 'batch_create') {
+      await executeBatchCreate(pendingTask.tasks, btn);
     } else if (pendingTask.type === 'modify') {
       await executeModify(pendingTask, btn);
     }
@@ -161,8 +210,7 @@ const AI = (() => {
   async function executeCreate(task, btn) {
     const t = UI.toast('同步到 Google Calendar...', 'loading', 0);
     try {
-      const res = await Cal.createEvent(task);
-      // Save to local store
+      const res     = await Cal.createEvent(task);
       const estMins = Cal.calcMins(task.start, task.end);
       App.store.tasks.push({
         id: Date.now(), gcalId: res.id,
@@ -172,16 +220,42 @@ const AI = (() => {
       });
       App.saveState();
       t.remove();
-      UI.toast('✓ 已创建并同步到 Google Calendar', 'success');
+      UI.toast('✓ 已创建：' + task.name + (task.tag !== '其他' ? ' #' + task.tag : ''), 'success');
       document.getElementById('confirmArea').innerHTML = '';
-      pendingTask = null;
-      chatHistory = [];
-      addAIBubble('✓ 任务「' + task.name + '」已创建成功！还需要安排其他任务吗？');
+      pendingTask = null; chatHistory = [];
+      addAIBubble('✓ 已创建「' + task.name + (task.tag !== '其他' ? ' #' + task.tag : '') + '」！还需要安排其他吗？');
     } catch(e) {
       t.remove();
       UI.toast('创建失败：' + e.message, 'error');
       if (btn) { btn.disabled = false; btn.innerHTML = '✓ 确认创建'; }
     }
+  }
+
+  async function executeBatchCreate(tasks, btn) {
+    const t = UI.toast('批量创建中（0/' + tasks.length + '）...', 'loading', 0);
+    let ok = 0, fail = 0;
+    for (let i = 0; i < tasks.length; i++) {
+      const task = tasks[i];
+      try {
+        const res     = await Cal.createEvent(task);
+        const estMins = Cal.calcMins(task.start, task.end);
+        App.store.tasks.push({
+          id: Date.now() + i, gcalId: res.id,
+          ...task, estMins,
+          done: false, actualMins: null, completedAt: null,
+          calendarId: Cal.activeCalendarId,
+        });
+        ok++;
+        t.textContent = '批量创建中（' + ok + '/' + tasks.length + '）...';
+      } catch(e) { fail++; }
+    }
+    App.saveState();
+    t.remove();
+    const msg = '✓ 已创建 ' + ok + ' 个事件' + (fail > 0 ? '（' + fail + ' 个失败）' : '');
+    UI.toast(msg, ok > 0 ? 'success' : 'error');
+    document.getElementById('confirmArea').innerHTML = '';
+    pendingTask = null; chatHistory = [];
+    addAIBubble(msg + '\n所有事件已同步到 Google Calendar，可在日历中查看。');
   }
 
   async function executeModify(pending, btn) {
@@ -265,12 +339,22 @@ const AI = (() => {
 
       if (parsed?.action === 'ask') {
         addAIBubble(parsed.question);
+
       } else if (parsed?.action === 'create' && parsed.task) {
         addAIBubble(parsed.summary || '请确认以下任务信息：');
         showCreateConfirm(parsed.task);
+
+      } else if (parsed?.action === 'batch_create' && parsed.tasks?.length) {
+        addAIBubble(parsed.summary || '我帮你准备了 ' + parsed.tasks.length + ' 个独立事件，请确认：');
+        showBatchConfirm(parsed.tasks, parsed.summary);
+
+      } else if (parsed?.action === 'query') {
+        await handleQuery(parsed);
+
       } else if (parsed?.action === 'modify') {
         addAIBubble(parsed.summary || '请确认以下修改：');
         showModifyConfirm(parsed.intent, parsed.target, parsed.changes || {}, parsed.summary);
+
       } else {
         addAIBubble(reply || '收到，还有其他需要吗？');
       }
@@ -279,6 +363,62 @@ const AI = (() => {
       if (e.message !== 'no key') addAIBubble('出现错误：' + e.message);
     } finally {
       document.getElementById('sendBtn').disabled = false;
+    }
+  }
+
+  /* ══ Handle query: fetch events and display in chat ══ */
+  async function handleQuery(parsed) {
+    const t = UI.toast('查询日历中...', 'loading', 0);
+    try {
+      let events = [];
+      const today = Cal.todayStr();
+
+      if (parsed.range === 'today') {
+        events = App.todayEvents?.length
+          ? App.todayEvents
+          : await Cal.loadTodayEvents();
+      } else if (parsed.range === 'tomorrow') {
+        const d = new Date(); d.setDate(d.getDate() + 1);
+        const ds = d.toISOString().slice(0, 10);
+        events = await Cal.loadEventsRange(ds, ds);
+      } else if (parsed.range === 'this_week') {
+        const d   = new Date();
+        const day = d.getDay() || 7;
+        d.setDate(d.getDate() - day + 1);
+        const start = d.toISOString().slice(0, 10);
+        d.setDate(d.getDate() + 6);
+        const end = d.toISOString().slice(0, 10);
+        events = await Cal.loadEventsRange(start, end);
+      } else if (parsed.range === 'date' && parsed.date) {
+        events = await Cal.loadEventsRange(parsed.date, parsed.date);
+      }
+
+      t.remove();
+
+      if (!events.length) {
+        addAIBubble('该时间段内没有任何日历事件。');
+        return;
+      }
+
+      // Format events as readable text
+      const lines = events.map(e => {
+        const startStr = e.start ? new Date(e.start).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+        const endStr   = e.end   ? new Date(e.end).toTimeString().slice(0,5) : '—';
+        const tagStr   = e.tag && e.tag !== '其他' ? ' #' + e.tag : '';
+        const doneStr  = e.done ? ' ✓' : '';
+        return '• ' + startStr + '–' + endStr + ' ' + e.name + tagStr + doneStr;
+      });
+
+      const header = parsed.range === 'today'     ? '今天的安排（共' + events.length + '项）：'
+                   : parsed.range === 'tomorrow'  ? '明天的安排（共' + events.length + '项）：'
+                   : parsed.range === 'this_week' ? '本周的安排（共' + events.length + '项）：'
+                   : parsed.date + ' 的安排（共' + events.length + '项）：';
+
+      addAIBubble(header + '\n\n' + lines.join('\n'));
+
+    } catch(e) {
+      t.remove();
+      addAIBubble('查询失败：' + e.message);
     }
   }
 
@@ -332,5 +472,6 @@ const AI = (() => {
   return {
     initChat, sendMessage, confirmAction, cancelConfirm,
     analyzeToday, setKey, loadKey,
+    showBatchConfirm,
   };
 })();

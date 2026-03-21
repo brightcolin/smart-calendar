@@ -3,7 +3,7 @@
 ═══════════════════════════════════════════════════ */
 
 /* ══ CONFIG — replace with your Client ID ══ */
-const GOOGLE_CLIENT_ID = '1097763862-q0struuoppg5hl2ed7jsmb1or59g8jj9.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
 
 /* ══ App state ══ */
 const App = {
@@ -369,11 +369,13 @@ async function deleteEvent(gcalId) {
 
 /* ══ Event card renderer ══ */
 function eventCard(e) {
-  const color    = Cal.TAG_HEX[e.tag] || '#9a9690';
+  const color     = Cal.TAG_HEX[e.tag] || '#9a9690';
   const isSelected = App.selectedIds.has(e.gcalId);
-  const startStr = e.start ? new Date(e.start).toTimeString().slice(0,5) : '—';
-  const endStr   = e.end   ? new Date(e.end).toTimeString().slice(0,5)   : '—';
-  const diff     = e.actualMins != null ? e.actualMins - (e.estMins || 0) : null;
+  const startStr  = e.start ? new Date(e.start).toTimeString().slice(0,5) : '—';
+  const endStr    = e.end   ? new Date(e.end).toTimeString().slice(0,5)   : '—';
+  const diff      = e.actualMins != null ? e.actualMins - (e.estMins || 0) : null;
+  // name is already clean (tag stripped by normalizeEvent)
+  const displayName = e.name;
 
   return '<div class="event-item ' + (e.done ? 'done' : '') + (isSelected ? ' selected' : '') + '" data-gcalid="' + esc(e.gcalId) + '">'
     + '<div class="event-color-bar" style="background:' + color + '"></div>'
@@ -383,9 +385,9 @@ function eventCard(e) {
         ? '<div class="event-checkbox ' + (isSelected ? 'checked' : '') + '" id="cb-' + esc(e.gcalId) + '" onclick="UI.toggleEventSelect(\'' + esc(e.gcalId) + '\')"></div>'
         : '')
     + '<div style="flex:1;min-width:0">'
-    + '<div class="event-name">' + esc(e.name.replace(/^【.*?】/, '')) + '</div>'
+    + '<div class="event-name">' + esc(displayName) + '</div>'
     + '<div class="event-meta">' + startStr + ' – ' + endStr + ' · 预估 ' + fmtMins(e.estMins) + '</div>'
-    + (e.description && !e.description.match(/^(预估时长|标签|实际|状态)/) ? '<div class="event-desc">' + esc(e.description.split('\n')[0].slice(0, 60)) + '</div>' : '')
+    + (e.description ? '<div class="event-desc">' + esc(e.description.slice(0, 80)) + (e.description.length > 80 ? '…' : '') + '</div>' : '')
     + (diff != null ? '<div class="event-actual ' + (diff > 0 ? 'over' : '') + '">实际 ' + fmtMins(e.actualMins) + ' · ' + (diff > 0 ? '超出 ' : '节省 ') + fmtMins(Math.abs(diff)) + '</div>' : '')
     + '</div>'
     + '<span class="badge badge-' + esc(e.tag) + '">' + esc(e.tag) + '</span>'

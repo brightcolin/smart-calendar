@@ -125,41 +125,77 @@ const Cal = (() => {
   }
 
   function normalizeEvent(e) {
-    const start = e.start?.dateTime || e.start?.date || '';
-    const end   = e.end?.dateTime   || e.end?.date   || '';
-    const desc  = e.description || '';
-    // Parse stored metadata from description
+    const start   = e.start?.dateTime || e.start?.date || '';
+    const end     = e.end?.dateTime   || e.end?.date   || '';
+    const desc    = e.description || '';
+    const rawName = e.summary || '无标题';
+
+    // Parse tag from title: "任务名 #标签" (new format)
+    // Also supports legacy format: "【标签】任务名"
+    let tag  = '其他';
+    let name = rawName;
+    const hashMatch   = rawName.match(/^(.+?)\s+#([^\s#]+)\s*$/);
+    const legacyMatch = rawName.match(/^【([^】]+)】(.+)$/);
+    if (hashMatch) {
+      name = hashMatch[1].trim();
+      tag  = hashMatch[2].trim();
+    } else if (legacyMatch) {
+      tag  = legacyMatch[1].trim();
+      name = legacyMatch[2].trim();
+    }
+    // Fallback: check description for tag metadata
+    if (tag === '其他') {
+      const tagDescMatch = desc.match(/标签：([^\n]+)/);
+      if (tagDescMatch) tag = tagDescMatch[1].trim();
+    }
+
     const estMatch    = desc.match(/预估时长：(\d+)分钟/);
     const actualMatch = desc.match(/实际：(\d+)分钟/);
-    const tagMatch    = desc.match(/标签：([^\n]+)/);
     const doneMatch   = desc.match(/状态：已完成/);
+
+    // Clean description: remove metadata lines for display
+    const cleanDesc = desc
+      .replace(/预估时长：\d+分钟\n?/g, '')
+      .replace(/实际：\d+分钟\n?/g, '')
+      .replace(/状态：已完成\n?/g, '')
+      .replace(/标签：[^\n]+\n?/g, '')
+      .trim();
+
     return {
-      gcalId:     e.id,
-      name:       e.summary || '无标题',
-      description: desc,
+      gcalId:      e.id,
+      name,
+      rawSummary:  rawName,
+      description: cleanDesc,
       start,
       end,
-      tag:        tagMatch?.[1]?.trim() || '其他',
-      estMins:    estMatch    ? parseInt(estMatch[1])    : calcMinsFromDates(start, end),
-      actualMins: actualMatch ? parseInt(actualMatch[1]) : null,
-      done:       !!doneMatch,
-      color:      e.colorId || '0',
-      reminders:  e.reminders,
-      calendarId: activeCalendarId,
+      tag:         VALID_TAGS.includes(tag) ? tag : '其他',
+      estMins:     estMatch    ? parseInt(estMatch[1])    : calcMinsFromDates(start, end),
+      actualMins:  actualMatch ? parseInt(actualMatch[1]) : null,
+      done:        !!doneMatch,
+      color:       e.colorId || '0',
+      reminders:   e.reminders,
+      calendarId:  activeCalendarId,
     };
   }
+
+  const VALID_TAGS = ['学习','课程','科研','社工','运动','娱乐','工作','其他'];
 
   function calcMinsFromDates(start, end) {
     if (!start || !end) return 0;
     return Math.round((new Date(end) - new Date(start)) / 60000);
   }
 
-  /* ══ Create event ══ */
+  /* ══ Create single event ══
+     Title format: "任务名 #标签"
+     Color synced from tag automatically
+  */
   async function createEvent(task) {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const tz      = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const colorId = TAG_COLOR[task.tag] || '0';
+    // New title format: "任务名 #标签"
+    const summary = task.name + (task.tag && task.tag !== '其他' ? ' #' + task.tag : '');
     const body = {
-      summary:     '【' + task.tag + '】' + task.name,
+      summary,
       description: buildDescription(task),
       start:       { dateTime: toDateTimeStr(task.date, task.start), timeZone: tz },
       end:         { dateTime: toDateTimeStr(task.date, task.end),   timeZone: tz },
@@ -170,6 +206,20 @@ const Cal = (() => {
       },
     };
     return req('POST', '/calendars/' + encodeURIComponent(activeCalendarId) + '/events', body);
+  }
+
+  /* ══ Batch create: create multiple independent events (no recurrence rule) ══ */
+  async function createEventsBatch(tasks) {
+    const results = [];
+    for (const task of tasks) {
+      try {
+        const res = await createEvent(task);
+        results.push({ ok: true, gcalId: res.id, task });
+      } catch(e) {
+        results.push({ ok: false, error: e.message, task });
+      }
+    }
+    return results;
   }
 
   /* ══ Update event ══ */
@@ -237,10 +287,11 @@ const Cal = (() => {
 
   /* ══ Helpers ══ */
   function buildDescription(task) {
-    let d = task.description || '';
-    d += '\n预估时长：' + (task.estMins || calcMins(task.start, task.end)) + '分钟';
-    d += '\n标签：' + task.tag;
-    return d.trim();
+    let lines = [];
+    if (task.description) lines.push(task.description);
+    lines.push('预估时长：' + (task.estMins || calcMins(task.start, task.end)) + '分钟');
+    lines.push('标签：' + task.tag);
+    return lines.join('\n').trim();
   }
 
   function toDateTimeStr(dateStr, timeStr) {
@@ -259,9 +310,9 @@ const Cal = (() => {
     get activeCalendarId() { return activeCalendarId; },
     get activeCalendarName() { return activeCalendarName; },
     loadTodayEvents, loadEventsRange,
-    createEvent, updateEvent, deleteEvent, markComplete,
+    createEvent, createEventsBatch, updateEvent, deleteEvent, markComplete,
     setupDailyReview,
-    TAG_COLOR, TAG_HEX,
+    TAG_COLOR, TAG_HEX, VALID_TAGS,
     calcMins, todayStr,
   };
 })();
