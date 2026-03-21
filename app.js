@@ -369,28 +369,37 @@ async function deleteEvent(gcalId) {
 
 /* ══ Event card renderer ══ */
 function eventCard(e) {
-  const color     = Cal.TAG_HEX[e.tag] || '#9a9690';
+  const color      = Cal.TAG_HEX[e.tag] || '#9a9690';
   const isSelected = App.selectedIds.has(e.gcalId);
-  const startStr  = e.start ? new Date(e.start).toTimeString().slice(0,5) : '—';
-  const endStr    = e.end   ? new Date(e.end).toTimeString().slice(0,5)   : '—';
-  const diff      = e.actualMins != null ? e.actualMins - (e.estMins || 0) : null;
-  // name is already clean (tag stripped by normalizeEvent)
-  const displayName = e.name;
+  // 24-hour format: HH:MM
+  const fmt24 = dt => {
+    if (!dt) return '—';
+    const d = new Date(dt);
+    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  };
+  const startStr = fmt24(e.start);
+  const endStr   = fmt24(e.end);
+  const diff     = e.actualMins != null ? e.actualMins - (e.estMins || 0) : null;
 
   return '<div class="event-item ' + (e.done ? 'done' : '') + (isSelected ? ' selected' : '') + '" data-gcalid="' + esc(e.gcalId) + '">'
-    + '<div class="event-color-bar" style="background:' + color + '"></div>'
+    // Left color bar (clickable to edit tag/color)
+    + '<div class="event-color-bar" style="background:' + color + ';cursor:pointer" onclick="openTagEditor(\'' + esc(e.gcalId) + '\')" title="点击修改标签和颜色"></div>'
     + '<div class="event-inner">'
     + '<div class="event-header">'
     + (App.batchMode
         ? '<div class="event-checkbox ' + (isSelected ? 'checked' : '') + '" id="cb-' + esc(e.gcalId) + '" onclick="UI.toggleEventSelect(\'' + esc(e.gcalId) + '\')"></div>'
         : '')
     + '<div style="flex:1;min-width:0">'
-    + '<div class="event-name">' + esc(displayName) + '</div>'
+    + '<div class="event-name">' + esc(e.name) + '</div>'
     + '<div class="event-meta">' + startStr + ' – ' + endStr + ' · 预估 ' + fmtMins(e.estMins) + '</div>'
     + (e.description ? '<div class="event-desc">' + esc(e.description.slice(0, 80)) + (e.description.length > 80 ? '…' : '') + '</div>' : '')
     + (diff != null ? '<div class="event-actual ' + (diff > 0 ? 'over' : '') + '">实际 ' + fmtMins(e.actualMins) + ' · ' + (diff > 0 ? '超出 ' : '节省 ') + fmtMins(Math.abs(diff)) + '</div>' : '')
     + '</div>'
-    + '<span class="badge badge-' + esc(e.tag) + '">' + esc(e.tag) + '</span>'
+    // Tag badge with color dot — clickable to edit
+    + '<span class="badge badge-' + esc(e.tag) + '" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="openTagEditor(\'' + esc(e.gcalId) + '\')">'
+    + '<span style="width:7px;height:7px;border-radius:50%;background:' + color + ';display:inline-block;flex-shrink:0"></span>'
+    + esc(e.tag)
+    + '</span>'
     + '</div>'
     + (!e.done && !App.batchMode
         ? '<div class="event-actions">'
@@ -399,6 +408,60 @@ function eventCard(e) {
           + '</div>'
         : '')
     + '</div></div>';
+}
+
+/* ══ Tag / color editor ══ */
+function openTagEditor(gcalId) {
+  const event = (App.todayEvents || []).find(e => e.gcalId === gcalId);
+  if (!event) return;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.id = 'tagEditorModal';
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+
+  const tags = Cal.VALID_TAGS;
+  const tagOptions = tags.map(tag => {
+    const hex     = Cal.TAG_HEX[tag] || '#9a9690';
+    const active  = event.tag === tag;
+    return '<div onclick="applyTagEdit(\'' + esc(gcalId) + '\',\'' + esc(tag) + '\',this.closest(\'.modal-overlay\'))"'
+      + ' style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer;transition:opacity 0.15s"'
+      + ' onmouseover="this.style.opacity=\'0.7\'" onmouseout="this.style.opacity=\'1\'">'
+      + '<span style="width:14px;height:14px;border-radius:50%;background:' + hex + ';flex-shrink:0;box-shadow:' + (active ? '0 0 0 2px var(--bg),0 0 0 3px ' + hex : 'none') + '"></span>'
+      + '<span style="font-size:14px;flex:1">' + esc(tag) + '</span>'
+      + (active ? '<span style="color:var(--accent);font-size:13px">✓ 当前</span>' : '')
+      + '</div>';
+  }).join('');
+
+  modal.innerHTML = '<div class="modal" onclick="event.stopPropagation()">'
+    + '<div class="modal-title">修改标签和颜色</div>'
+    + '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">选择后自动同步颜色到 Google Calendar</div>'
+    + tagOptions
+    + '<button class="btn" style="margin-top:12px" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>'
+    + '</div>';
+  document.body.appendChild(modal);
+}
+
+async function applyTagEdit(gcalId, newTag, modalEl) {
+  if (modalEl) modalEl.remove();
+  const event = (App.todayEvents || []).find(e => e.gcalId === gcalId);
+  if (!event || event.tag === newTag) return;
+  const t = UI.toast('更新标签和颜色...', 'loading', 0);
+  try {
+    const newSummary = event.name + (newTag && newTag !== '其他' ? ' #' + newTag : '');
+    const newDesc    = (event.description || '')
+      .replace(/标签：[^\n]*/g, '').trim() + '\n标签：' + newTag;
+    await Cal.updateEvent(gcalId, {
+      summary:     newSummary,
+      colorId:     Cal.TAG_COLOR[newTag] || '0',
+      description: newDesc,
+    });
+    t.remove();
+    UI.toast('✓ 已更新为「' + newTag + '」', 'success');
+    await Cal.loadTodayEvents();
+  } catch(e) {
+    t.remove();
+    UI.toast('更新失败：' + e.message, 'error');
+  }
 }
 
 /* ══ Shared helpers ══ */

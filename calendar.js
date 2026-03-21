@@ -224,19 +224,19 @@ const Cal = (() => {
 
   /* ══ Update event ══ */
   async function updateEvent(gcalId, updates) {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const tz       = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const existing = await req('GET', '/calendars/' + encodeURIComponent(activeCalendarId) + '/events/' + gcalId);
-    const merged = {
-      ...existing,
-      ...updates,
-      start: updates.start
-        ? { dateTime: updates.start, timeZone: tz }
-        : existing.start,
-      end: updates.end
-        ? { dateTime: updates.end, timeZone: tz }
-        : existing.end,
-    };
+    const merged   = { ...existing };
+
+    // Time updates
+    if (updates.start) merged.start = { dateTime: updates.start, timeZone: tz };
+    if (updates.end)   merged.end   = { dateTime: updates.end,   timeZone: tz };
+
+    // Text field updates
+    if (updates.summary     !== undefined) merged.summary     = updates.summary;
     if (updates.description !== undefined) merged.description = updates.description;
+    if (updates.colorId     !== undefined) merged.colorId     = updates.colorId;
+
     return req('PUT', '/calendars/' + encodeURIComponent(activeCalendarId) + '/events/' + gcalId, merged);
   }
 
