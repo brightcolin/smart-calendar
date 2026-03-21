@@ -3,7 +3,7 @@
 ═══════════════════════════════════════════════════ */
 
 /* ══ CONFIG — replace with your Client ID ══ */
-const GOOGLE_CLIENT_ID = '1097763862-q0struuoppg5hl2ed7jsmb1or59g8jj9.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
 
 /* ══ App state ══ */
 const App = {
@@ -87,6 +87,7 @@ const UI = {
     if (btn) btn.classList.add('active');
     if (name === 'stats')    Stats.render();
     if (name === 'today')    Cal.loadTodayEvents();
+    if (name === 'cal')      CalView.render();
     if (name === 'settings') UI.loadSettings();
   },
 
