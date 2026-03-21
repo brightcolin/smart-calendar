@@ -14,7 +14,6 @@ const App = {
   store: {
     tasks: [],
     cfg: {
-      workStart: '09:00', workEnd: '18:00',
       reviewTime: '23:30', defReminder: 10, defReminderMethod: 'popup',
       activeCalId: 'primary', activeCalName: '主日历',
     }
@@ -220,12 +219,9 @@ const UI = {
   /* ── Settings ── */
   async loadSettings() {
     const cfg = App.store.cfg;
-    document.getElementById('workStart').value       = cfg.workStart   || '09:00';
-    document.getElementById('workEnd').value         = cfg.workEnd     || '18:00';
-    document.getElementById('reviewTime').value      = cfg.reviewTime  || '23:30';
-    document.getElementById('defReminder').value     = cfg.defReminder || 10;
+    document.getElementById('reviewTime').value        = cfg.reviewTime  || '23:30';
+    document.getElementById('defReminder').value       = cfg.defReminder || 10;
     document.getElementById('defReminderMethod').value = cfg.defReminderMethod || 'popup';
-    // Load API key (decrypt from storage)
     const key = await AI.loadKey();
     const keyEl = document.getElementById('apiKey');
     if (key && keyEl) keyEl.placeholder = '已保存（输入新值可更新）';
@@ -234,11 +230,9 @@ const UI = {
   async saveSettings() {
     const key = document.getElementById('apiKey').value.trim();
     if (key) await AI.setKey(key);
-    App.store.cfg.workStart          = document.getElementById('workStart').value;
-    App.store.cfg.workEnd            = document.getElementById('workEnd').value;
-    App.store.cfg.reviewTime         = document.getElementById('reviewTime').value;
-    App.store.cfg.defReminder        = Math.min(120, Math.max(0, parseInt(document.getElementById('defReminder').value) || 10));
-    App.store.cfg.defReminderMethod  = document.getElementById('defReminderMethod').value;
+    App.store.cfg.reviewTime        = document.getElementById('reviewTime').value;
+    App.store.cfg.defReminder       = Math.min(120, Math.max(0, parseInt(document.getElementById('defReminder').value) || 10));
+    App.store.cfg.defReminderMethod = document.getElementById('defReminderMethod').value;
     App.saveState();
     this.toast('设置已保存', 'success');
   },
@@ -447,8 +441,11 @@ async function applyTagEdit(gcalId, newTag, modalEl) {
   if (!event || event.tag === newTag) return;
   const t = UI.toast('更新标签和颜色...', 'loading', 0);
   try {
-    const newSummary = event.name + (newTag && newTag !== '其他' ? ' #' + newTag : '');
-    const newDesc    = (event.description || '')
+    // Prefix format: "#工作 写周报"
+    const newSummary = (newTag && newTag !== '其他')
+      ? '#' + newTag + ' ' + event.name
+      : event.name;
+    const newDesc = (event.description || '')
       .replace(/标签：[^\n]*/g, '').trim() + '\n标签：' + newTag;
     await Cal.updateEvent(gcalId, {
       summary:     newSummary,

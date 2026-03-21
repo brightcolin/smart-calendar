@@ -130,21 +130,27 @@ const Cal = (() => {
     const desc    = e.description || '';
     const rawName = e.summary || '无标题';
 
-    // Parse tag from title: "任务名 #标签" (new format)
-    // Also supports legacy format: "【标签】任务名"
+    // Parse tag from title:
+    //   New format (prefix):  "#标签 任务名"
+    //   Old format (suffix):  "任务名 #标签"
+    //   Legacy format:        "【标签】任务名"
     let tag  = '其他';
     let name = rawName;
-    const hashMatch   = rawName.match(/^(.+?)\s+#([^\s#]+)\s*$/);
-    const legacyMatch = rawName.match(/^【([^】]+)】(.+)$/);
-    if (hashMatch) {
-      name = hashMatch[1].trim();
-      tag  = hashMatch[2].trim();
+    const prefixMatch  = rawName.match(/^#([^\s#]+)\s+(.+)$/);
+    const suffixMatch  = rawName.match(/^(.+?)\s+#([^\s#]+)\s*$/);
+    const legacyMatch  = rawName.match(/^【([^】]+)】(.+)$/);
+    if (prefixMatch) {
+      tag  = prefixMatch[1].trim();
+      name = prefixMatch[2].trim();
+    } else if (suffixMatch) {
+      name = suffixMatch[1].trim();
+      tag  = suffixMatch[2].trim();
     } else if (legacyMatch) {
       tag  = legacyMatch[1].trim();
       name = legacyMatch[2].trim();
     }
-    // Fallback: check description for tag metadata
-    if (tag === '其他') {
+    // Fallback: check description metadata
+    if (!VALID_TAGS.includes(tag)) {
       const tagDescMatch = desc.match(/标签：([^\n]+)/);
       if (tagDescMatch) tag = tagDescMatch[1].trim();
     }
@@ -153,7 +159,6 @@ const Cal = (() => {
     const actualMatch = desc.match(/实际：(\d+)分钟/);
     const doneMatch   = desc.match(/状态：已完成/);
 
-    // Clean description: remove metadata lines for display
     const cleanDesc = desc
       .replace(/预估时长：\d+分钟\n?/g, '')
       .replace(/实际：\d+分钟\n?/g, '')
@@ -186,14 +191,16 @@ const Cal = (() => {
   }
 
   /* ══ Create single event ══
-     Title format: "任务名 #标签"
+     Title format: "#标签 任务名"  (tag prefix)
      Color synced from tag automatically
   */
   async function createEvent(task) {
     const tz      = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const colorId = TAG_COLOR[task.tag] || '0';
-    // New title format: "任务名 #标签"
-    const summary = task.name + (task.tag && task.tag !== '其他' ? ' #' + task.tag : '');
+    // Prefix format: "#工作 写周报"  (no tag prefix when tag is 其他)
+    const summary = (task.tag && task.tag !== '其他')
+      ? '#' + task.tag + ' ' + task.name
+      : task.name;
     const body = {
       summary,
       description: buildDescription(task),
