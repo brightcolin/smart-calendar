@@ -41,43 +41,44 @@ const AI = (() => {
     const today = Cal.todayStr();
     const now   = new Date().toTimeString().slice(0, 5);
     const tz    = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const weekDays = ['日','一','二','三','四','五','六'];
 
-    // Build next 14 days date list to help AI resolve relative dates
+    // Next 14 days for relative date resolution
     const dates = [];
     for (let i = 0; i < 14; i++) {
       const d = new Date(); d.setDate(d.getDate() + i);
-      const weekDay = ['日','一','二','三','四','五','六'][d.getDay()];
-      dates.push(d.toISOString().slice(0,10) + '(周' + weekDay + ')');
+      dates.push(d.toISOString().slice(0,10) + '(周' + weekDays[d.getDay()] + ')');
     }
 
-    return `你是智能日历任务助手。今天是${today}(${['日','一','二','三','四','五','六'][new Date().getDay()]})，当前时间${now}，时区${tz}。
-工作时间${cfg.workStart||'09:00'}至${cfg.workEnd||'18:00'}，默认提前提醒${cfg.defReminder||10}分钟（${cfg.defReminderMethod||'popup'}方式）。
-未来14天日期参考：${dates.slice(0,7).join('，')}
-标签体系：学习|课程|科研|社工|运动|娱乐|工作|其他。标签在事件标题末尾用 #标签 标注（如"写周报 #工作"）。
+    // Today's existing events (for modify context only)
+    const existingNames = (App.todayEvents || [])
+      .map(e => '"' + e.name + '"')
+      .join('、') || '（今日暂无已知活动）';
 
-只输出 JSON，不输出任何其他文字。有四种模式：
+    return `你是智能日历任务助手。今天是${today}(周${weekDays[new Date().getDay()]})，当前时间${now}，时区${tz}。
+工作时间${cfg.workStart||'09:00'}至${cfg.workEnd||'18:00'}。默认提前提醒${cfg.defReminder||10}分钟，方式${cfg.defReminderMethod||'popup'}。
+未来14天：${dates.slice(0,7).join('，')}
+标签：学习|课程|科研|社工|运动|娱乐|工作|其他。标签写在标题末尾，格式"任务名 #标签"（如"写周报 #工作"）。
+今日已有活动：${existingNames}
 
-【单个创建】信息足够创建一个事件时：
-{"action":"create","task":{"name":"任务名(30字内，不含#标签)","tag":"标签","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","reminder":分钟数,"reminderMethod":"popup|email","description":"备注或空"},"summary":"一句话确认"}
+只输出合法 JSON，不输出任何其他文字。支持三种动作：
 
-【批量创建】用户描述多个事件或周期性任务（如"持续五周每周五看电影"）时，生成独立事件列表，绝对不用重复规则：
-{"action":"batch_create","tasks":[{"name":"任务名","tag":"标签","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","reminder":分钟数,"reminderMethod":"popup|email","description":""},...更多事件],"summary":"共X个事件，描述安排"}
+【创建】用户要安排新活动时（无论是否提到周期，只创建第一个时间点）：
+{"action":"create","task":{"name":"活动名(30字内，不含#标签)","tag":"标签","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","reminder":分钟数,"reminderMethod":"popup|email","description":"备注或空字符串"},"summary":"一句话确认，用24小时制"}
 
-【查询】用户询问已有安排（如"今天有什么""本周安排""明天几点有会"）时：
-{"action":"query","range":"today|tomorrow|this_week|date","date":"YYYY-MM-DD(range=date时必填)","summary":"简短说明正在查询什么"}
+【修改】用户明确要求修改/推迟/提前/删除/完成"今日已有活动"时。判断标准：用户必须提到已存在活动的名字或明确说"把…改成…""推迟""提前""删除""完成"等词：
+{"action":"modify","intent":"reschedule|complete|delete|update","target":"已有活动名关键词","changes":{"start":"HH:MM","end":"HH:MM","date":"YYYY-MM-DD","tag":"新标签(可选)","description":"新描述(可选)"},"summary":"一句话说明"}
 
-【修改】用户要求修改/推迟/完成/删除已有任务时：
-{"action":"modify","intent":"reschedule|complete|delete|update","target":"任务名关键词","changes":{"start":"HH:MM","end":"HH:MM","date":"YYYY-MM-DD","description":""},"summary":"一句话说明"}
-
-【反问】信息不足时（一次只问一个最重要的问题）：
+【反问】信息不足（缺时间/时长）时，一次只问一个问题：
 {"action":"ask","question":"问题"}
 
-规则：
-- 标签自动从内容判断，用户写了#标签则优先用用户写的
-- "明天""后天""下周五"等相对日期要转换为具体YYYY-MM-DD
-- 超出工作时间时在summary中提醒
-- reminder和reminderMethod没说时用默认值
-- 批量创建时每个事件都是独立的，有各自的具体日期`;
+关键判断规则（防误判）：
+1. 用户说"今天下午三点开会"→ 创建新活动，不是修改
+2. 只有用户明确说要改某个已存在的活动，才用modify
+3. 周期性描述（"每周五看电影""持续五周"）→ 只创建第一个时间点的活动，在summary中说明
+4. 所有时间一律用24小时制（如14:00，不用下午2点）
+5. 用户写了#标签则优先采用，否则根据内容自动判断
+6. reminder/reminderMethod未提及时用默认值`;
   }
 
   /* ══ Chat UI helpers ══ */
@@ -86,7 +87,7 @@ const AI = (() => {
     pendingTask = null;
     document.getElementById('chatArea').innerHTML = '';
     document.getElementById('confirmArea').innerHTML = '';
-    addAIBubble('你好！直接告诉我你要安排什么，或者查询已有日历安排。\n\n例如：\n「明天下午3点开会一小时 #工作」\n「持续五周，每周五晚上8点看电影两小时」\n「今天有什么安排？」\n「把今天下午的会议推迟到4点」');
+    addAIBubble('你好！直接告诉我要安排什么，或者修改已有活动。\n\n例如：\n「明天14:00开会一小时 #工作」\n「每周五20:00看电影两小时」（只创建本周）\n「把今天下午的会议推迟到16:00」');
   }
 
   function addAIBubble(text, thinking = false) {
@@ -143,44 +144,21 @@ const AI = (() => {
     confirm.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
 
-  /* ══ Confirm card for BATCH CREATE ══ */
-  function showBatchConfirm(tasks, summary) {
-    pendingTask = { type: 'batch_create', tasks };
-    const confirm = document.getElementById('confirmArea');
-    // Show first 5, collapse rest
-    const preview = tasks.slice(0, 5);
-    const extra   = tasks.length - 5;
-    confirm.innerHTML =
-      '<div class="confirm-card">'
-      + '<div class="confirm-title">批量创建 ' + tasks.length + ' 个事件</div>'
-      + preview.map((t, i) =>
-          '<div class="confirm-row" style="flex-direction:column;align-items:flex-start;gap:2px">'
-          + '<span style="font-size:13px;font-weight:500">' + esc(i+1) + '. ' + esc(t.name) + (t.tag && t.tag !== '其他' ? ' <span class="badge badge-' + esc(t.tag) + '">' + esc(t.tag) + '</span>' : '') + '</span>'
-          + '<span style="font-size:12px;font-family:\'DM Mono\',monospace;color:var(--text2)">' + esc(t.date) + ' ' + esc(t.start) + '–' + esc(t.end) + '</span>'
-          + '</div>'
-        ).join('')
-      + (extra > 0 ? '<div style="font-size:12px;color:var(--text3);padding:6px 0">…还有 ' + extra + ' 个事件</div>' : '')
-      + '<div class="confirm-actions">'
-      + '<button class="btn btn-primary" onclick="AI.confirmAction()">✓ 全部创建</button>'
-      + '<button class="btn" onclick="AI.cancelConfirm()">取消</button>'
-      + '</div></div>';
-    confirm.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }
-
   /* ══ Confirm card for MODIFY ══ */
   function showModifyConfirm(intent, target, changes, summary) {
     pendingTask = { type: 'modify', intent, target, changes };
     const confirm = document.getElementById('confirmArea');
-    const intentLabel = { reschedule:'修改时间', complete:'标记完成', delete:'删除', update:'更新' };
+    const intentLabel = { reschedule:'修改时间', complete:'标记完成', delete:'删除', update:'更新内容' };
     confirm.innerHTML =
       '<div class="confirm-card">'
       + '<div class="confirm-title">请确认修改操作</div>'
       + row('操作', intentLabel[intent] || intent)
-      + row('目标任务', esc(target))
+      + row('目标活动', esc(target))
       + (changes.date  ? row('新日期', esc(changes.date))  : '')
-      + (changes.start ? row('新开始', esc(changes.start)) : '')
-      + (changes.end   ? row('新结束', esc(changes.end))   : '')
-      + (changes.description ? row('描述', esc(changes.description)) : '')
+      + (changes.start ? row('新开始', esc(changes.start) + ' (24小时制)') : '')
+      + (changes.end   ? row('新结束', esc(changes.end)   + ' (24小时制)') : '')
+      + (changes.tag   ? row('新标签', '<span class="badge badge-' + esc(changes.tag) + '">' + esc(changes.tag) + '</span>') : '')
+      + (changes.description ? row('新描述', esc(changes.description)) : '')
       + '<div class="confirm-actions">'
       + '<button class="btn btn-primary" onclick="AI.confirmAction()">✓ 确认</button>'
       + '<button class="btn" onclick="AI.cancelConfirm()">取消</button>'
@@ -200,8 +178,6 @@ const AI = (() => {
 
     if (pendingTask.type === 'create') {
       await executeCreate(pendingTask.task, btn);
-    } else if (pendingTask.type === 'batch_create') {
-      await executeBatchCreate(pendingTask.tasks, btn);
     } else if (pendingTask.type === 'modify') {
       await executeModify(pendingTask, btn);
     }
@@ -220,10 +196,11 @@ const AI = (() => {
       });
       App.saveState();
       t.remove();
-      UI.toast('✓ 已创建：' + task.name + (task.tag !== '其他' ? ' #' + task.tag : ''), 'success');
+      const tagSuffix = task.tag && task.tag !== '其他' ? ' #' + task.tag : '';
+      UI.toast('✓ 已创建：' + task.name + tagSuffix, 'success');
       document.getElementById('confirmArea').innerHTML = '';
       pendingTask = null; chatHistory = [];
-      addAIBubble('✓ 已创建「' + task.name + (task.tag !== '其他' ? ' #' + task.tag : '') + '」！还需要安排其他吗？');
+      addAIBubble('✓ 已创建「' + task.name + tagSuffix + '」（' + task.date + ' ' + task.start + '–' + task.end + '）。还需要安排其他吗？');
     } catch(e) {
       t.remove();
       UI.toast('创建失败：' + e.message, 'error');
@@ -231,78 +208,69 @@ const AI = (() => {
     }
   }
 
-  async function executeBatchCreate(tasks, btn) {
-    const t = UI.toast('批量创建中（0/' + tasks.length + '）...', 'loading', 0);
-    let ok = 0, fail = 0;
-    for (let i = 0; i < tasks.length; i++) {
-      const task = tasks[i];
-      try {
-        const res     = await Cal.createEvent(task);
-        const estMins = Cal.calcMins(task.start, task.end);
-        App.store.tasks.push({
-          id: Date.now() + i, gcalId: res.id,
-          ...task, estMins,
-          done: false, actualMins: null, completedAt: null,
-          calendarId: Cal.activeCalendarId,
-        });
-        ok++;
-        t.textContent = '批量创建中（' + ok + '/' + tasks.length + '）...';
-      } catch(e) { fail++; }
-    }
-    App.saveState();
-    t.remove();
-    const msg = '✓ 已创建 ' + ok + ' 个事件' + (fail > 0 ? '（' + fail + ' 个失败）' : '');
-    UI.toast(msg, ok > 0 ? 'success' : 'error');
-    document.getElementById('confirmArea').innerHTML = '';
-    pendingTask = null; chatHistory = [];
-    addAIBubble(msg + '\n所有事件已同步到 Google Calendar，可在日历中查看。');
-  }
-
   async function executeModify(pending, btn) {
     const { intent, target, changes } = pending;
     const t = UI.toast('正在处理...', 'loading', 0);
     try {
-      // Find matching event in today's list
+      // Find matching event from today's loaded list
       const events = App.todayEvents || [];
-      const match  = events.find(e => e.name.includes(target) || target.includes(e.name.replace(/^【.*?】/, '')));
+      const match  = events.find(e =>
+        e.name.includes(target) ||
+        target.includes(e.name) ||
+        e.rawSummary?.includes(target)
+      );
 
       if (!match) {
         t.remove();
-        UI.toast('未找到匹配任务：' + target, 'error');
+        UI.toast('未找到匹配活动：' + target + '（请先在今日页面刷新）', 'error');
         if (btn) { btn.disabled = false; btn.innerHTML = '✓ 确认'; }
         return;
       }
 
       if (intent === 'complete') {
-        const now = new Date();
-        const actualMins = Math.round((now - new Date(match.start)) / 60000);
-        await Cal.markComplete(match, Math.max(0, actualMins));
-        // Update local store
-        const local = App.store.tasks.find(t => t.gcalId === match.gcalId);
-        if (local) { local.done = true; local.actualMins = Math.max(0, actualMins); App.saveState(); }
+        const now        = new Date();
+        const actualMins = Math.round(Math.max(0, (now - new Date(match.start)) / 60000));
+        await Cal.markComplete(match, actualMins);
+        const local = App.store.tasks.find(x => x.gcalId === match.gcalId);
+        if (local) { local.done = true; local.actualMins = actualMins; App.saveState(); }
         t.remove();
-        UI.toast('✓ 任务已标记完成', 'success');
+        UI.toast('✓ 已标记完成', 'success');
+
       } else if (intent === 'delete') {
         await Cal.deleteEvent(match.gcalId);
-        App.store.tasks = App.store.tasks.filter(t => t.gcalId !== match.gcalId);
+        App.store.tasks = App.store.tasks.filter(x => x.gcalId !== match.gcalId);
         App.saveState();
         t.remove();
-        UI.toast('✓ 任务已删除', 'success');
+        UI.toast('✓ 已删除', 'success');
+
       } else if (intent === 'reschedule' || intent === 'update') {
-        const tz    = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const date  = changes.date  || match.start.slice(0, 10);
         const start = changes.start ? date + 'T' + changes.start + ':00' : match.start;
         const end   = changes.end   ? date + 'T' + changes.end   + ':00' : match.end;
         const updates = { start, end };
-        if (changes.description) updates.description = changes.description;
+
+        // Handle tag change: update summary and colorId
+        if (changes.tag) {
+          const newTag     = changes.tag;
+          const newSummary = match.name + (newTag && newTag !== '其他' ? ' #' + newTag : '');
+          updates.summary  = newSummary;
+          updates.colorId  = Cal.TAG_COLOR[newTag] || '0';
+          // Update description tag metadata
+          const newDesc = (match.description || '')
+            .replace(/标签：[^\n]*/g, '')
+            .trim() + '\n标签：' + newTag;
+          updates.description = newDesc;
+        }
+        if (changes.description && !changes.tag) {
+          updates.description = changes.description;
+        }
         await Cal.updateEvent(match.gcalId, updates);
         t.remove();
-        UI.toast('✓ 任务已更新', 'success');
+        UI.toast('✓ 已更新', 'success');
       }
 
       document.getElementById('confirmArea').innerHTML = '';
-      pendingTask = null;
-      chatHistory = [];
+      pendingTask = null; chatHistory = [];
       addAIBubble('✓ 操作完成！还有其他需要处理的吗？');
       await Cal.loadTodayEvents();
     } catch(e) {
@@ -341,21 +309,15 @@ const AI = (() => {
         addAIBubble(parsed.question);
 
       } else if (parsed?.action === 'create' && parsed.task) {
-        addAIBubble(parsed.summary || '请确认以下任务信息：');
+        addAIBubble(parsed.summary || '请确认以下活动信息：');
         showCreateConfirm(parsed.task);
-
-      } else if (parsed?.action === 'batch_create' && parsed.tasks?.length) {
-        addAIBubble(parsed.summary || '我帮你准备了 ' + parsed.tasks.length + ' 个独立事件，请确认：');
-        showBatchConfirm(parsed.tasks, parsed.summary);
-
-      } else if (parsed?.action === 'query') {
-        await handleQuery(parsed);
 
       } else if (parsed?.action === 'modify') {
         addAIBubble(parsed.summary || '请确认以下修改：');
         showModifyConfirm(parsed.intent, parsed.target, parsed.changes || {}, parsed.summary);
 
       } else {
+        // Fallback: show raw reply (should rarely happen)
         addAIBubble(reply || '收到，还有其他需要吗？');
       }
     } catch(e) {
@@ -363,62 +325,6 @@ const AI = (() => {
       if (e.message !== 'no key') addAIBubble('出现错误：' + e.message);
     } finally {
       document.getElementById('sendBtn').disabled = false;
-    }
-  }
-
-  /* ══ Handle query: fetch events and display in chat ══ */
-  async function handleQuery(parsed) {
-    const t = UI.toast('查询日历中...', 'loading', 0);
-    try {
-      let events = [];
-      const today = Cal.todayStr();
-
-      if (parsed.range === 'today') {
-        events = App.todayEvents?.length
-          ? App.todayEvents
-          : await Cal.loadTodayEvents();
-      } else if (parsed.range === 'tomorrow') {
-        const d = new Date(); d.setDate(d.getDate() + 1);
-        const ds = d.toISOString().slice(0, 10);
-        events = await Cal.loadEventsRange(ds, ds);
-      } else if (parsed.range === 'this_week') {
-        const d   = new Date();
-        const day = d.getDay() || 7;
-        d.setDate(d.getDate() - day + 1);
-        const start = d.toISOString().slice(0, 10);
-        d.setDate(d.getDate() + 6);
-        const end = d.toISOString().slice(0, 10);
-        events = await Cal.loadEventsRange(start, end);
-      } else if (parsed.range === 'date' && parsed.date) {
-        events = await Cal.loadEventsRange(parsed.date, parsed.date);
-      }
-
-      t.remove();
-
-      if (!events.length) {
-        addAIBubble('该时间段内没有任何日历事件。');
-        return;
-      }
-
-      // Format events as readable text
-      const lines = events.map(e => {
-        const startStr = e.start ? new Date(e.start).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
-        const endStr   = e.end   ? new Date(e.end).toTimeString().slice(0,5) : '—';
-        const tagStr   = e.tag && e.tag !== '其他' ? ' #' + e.tag : '';
-        const doneStr  = e.done ? ' ✓' : '';
-        return '• ' + startStr + '–' + endStr + ' ' + e.name + tagStr + doneStr;
-      });
-
-      const header = parsed.range === 'today'     ? '今天的安排（共' + events.length + '项）：'
-                   : parsed.range === 'tomorrow'  ? '明天的安排（共' + events.length + '项）：'
-                   : parsed.range === 'this_week' ? '本周的安排（共' + events.length + '项）：'
-                   : parsed.date + ' 的安排（共' + events.length + '项）：';
-
-      addAIBubble(header + '\n\n' + lines.join('\n'));
-
-    } catch(e) {
-      t.remove();
-      addAIBubble('查询失败：' + e.message);
     }
   }
 
@@ -472,6 +378,5 @@ const AI = (() => {
   return {
     initChat, sendMessage, confirmAction, cancelConfirm,
     analyzeToday, setKey, loadKey,
-    showBatchConfirm,
   };
 })();
