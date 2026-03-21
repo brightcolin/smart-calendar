@@ -124,6 +124,36 @@ const Cal = (() => {
     return (data.items || []).map(normalizeEvent);
   }
 
+  /* ══ Search events by keyword across a date range ══ */
+  async function searchEvents(keyword, dateStr) {
+    // Search ±7 days around given date (default today)
+    const base  = dateStr ? new Date(dateStr) : new Date();
+    const start = new Date(base); start.setDate(start.getDate() - 1);
+    const end   = new Date(base); end.setDate(end.getDate() + 14);
+    const tz    = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const params = new URLSearchParams({
+      q:            keyword,
+      timeMin:      start.toISOString(),
+      timeMax:      end.toISOString(),
+      singleEvents: true,
+      orderBy:      'startTime',
+      maxResults:   20,
+      timeZone:     tz,
+    });
+    const data = await req('GET', '/calendars/' + encodeURIComponent(activeCalendarId) + '/events?' + params);
+    return (data.items || []).map(normalizeEvent);
+  }
+
+  /* ══ Load a full week for calendar view ══ */
+  async function loadWeekEvents(mondayDate) {
+    const end = new Date(mondayDate);
+    end.setDate(end.getDate() + 6);
+    return loadEventsRange(
+      mondayDate.toISOString().slice(0, 10),
+      end.toISOString().slice(0, 10)
+    );
+  }
+
   function normalizeEvent(e) {
     const start   = e.start?.dateTime || e.start?.date || '';
     const end     = e.end?.dateTime   || e.end?.date   || '';
@@ -316,7 +346,7 @@ const Cal = (() => {
     loadCalendars, getCalendars, setActiveCalendar,
     get activeCalendarId() { return activeCalendarId; },
     get activeCalendarName() { return activeCalendarName; },
-    loadTodayEvents, loadEventsRange,
+    loadTodayEvents, loadEventsRange, searchEvents, loadWeekEvents,
     createEvent, createEventsBatch, updateEvent, deleteEvent, markComplete,
     setupDailyReview,
     TAG_COLOR, TAG_HEX, VALID_TAGS,
