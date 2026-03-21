@@ -43,22 +43,20 @@ const AI = (() => {
     const tz    = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const weekDays = ['日','一','二','三','四','五','六'];
 
-    // Next 14 days for relative date resolution
     const dates = [];
     for (let i = 0; i < 14; i++) {
       const d = new Date(); d.setDate(d.getDate() + i);
       dates.push(d.toISOString().slice(0,10) + '(周' + weekDays[d.getDay()] + ')');
     }
 
-    // Today's existing events (for modify context only)
     const existingNames = (App.todayEvents || [])
       .map(e => '"' + e.name + '"')
       .join('、') || '（今日暂无已知活动）';
 
     return `你是智能日历任务助手。今天是${today}(周${weekDays[new Date().getDay()]})，当前时间${now}，时区${tz}。
-工作时间${cfg.workStart||'09:00'}至${cfg.workEnd||'18:00'}。默认提前提醒${cfg.defReminder||10}分钟，方式${cfg.defReminderMethod||'popup'}。
+默认提前提醒${cfg.defReminder||10}分钟，方式${cfg.defReminderMethod||'popup'}。
 未来14天：${dates.slice(0,7).join('，')}
-标签：学习|课程|科研|社工|运动|娱乐|工作|其他。标签写在标题末尾，格式"任务名 #标签"（如"写周报 #工作"）。
+标签：学习|课程|科研|社工|运动|娱乐|工作|其他。标签写在标题最前面，格式"#标签 任务名"（如"#工作 写周报"）。标签为"其他"时不加前缀，直接写任务名。
 今日已有活动：${existingNames}
 
 只输出合法 JSON，不输出任何其他文字。支持三种动作：
@@ -66,17 +64,17 @@ const AI = (() => {
 【创建】用户要安排新活动时（无论是否提到周期，只创建第一个时间点）：
 {"action":"create","task":{"name":"活动名(30字内，不含#标签)","tag":"标签","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","reminder":分钟数,"reminderMethod":"popup|email","description":"备注或空字符串"},"summary":"一句话确认，用24小时制"}
 
-【修改】用户明确要求修改/推迟/提前/删除/完成"今日已有活动"时。判断标准：用户必须提到已存在活动的名字或明确说"把…改成…""推迟""提前""删除""完成"等词：
+【修改】用户明确要求修改/推迟/提前/删除/完成"今日已有活动"时：
 {"action":"modify","intent":"reschedule|complete|delete|update","target":"已有活动名关键词","changes":{"start":"HH:MM","end":"HH:MM","date":"YYYY-MM-DD","tag":"新标签(可选)","description":"新描述(可选)"},"summary":"一句话说明"}
 
 【反问】信息不足（缺时间/时长）时，一次只问一个问题：
 {"action":"ask","question":"问题"}
 
 关键判断规则（防误判）：
-1. 用户说"今天下午三点开会"→ 创建新活动，不是修改
+1. 用户说"今天15:00开会"→ 创建新活动，不是修改
 2. 只有用户明确说要改某个已存在的活动，才用modify
-3. 周期性描述（"每周五看电影""持续五周"）→ 只创建第一个时间点的活动，在summary中说明
-4. 所有时间一律用24小时制（如14:00，不用下午2点）
+3. 周期性描述（"每周五看电影"）→ 只创建第一个时间点，summary中说明
+4. 所有时间用24小时制（14:00，不用"下午2点"）
 5. 用户写了#标签则优先采用，否则根据内容自动判断
 6. reminder/reminderMethod未提及时用默认值`;
   }
@@ -87,7 +85,7 @@ const AI = (() => {
     pendingTask = null;
     document.getElementById('chatArea').innerHTML = '';
     document.getElementById('confirmArea').innerHTML = '';
-    addAIBubble('你好！直接告诉我要安排什么，或者修改已有活动。\n\n例如：\n「明天14:00开会一小时 #工作」\n「每周五20:00看电影两小时」（只创建本周）\n「把今天下午的会议推迟到16:00」');
+    addAIBubble('你好！直接告诉我要安排什么，或者修改已有活动。\n\n例如：\n「#工作 明天14:00开会一小时」\n「每周五20:00看电影两小时」（只创建本周）\n「把今天下午的会议推迟到16:00」');
   }
 
   function addAIBubble(text, thinking = false) {
@@ -122,14 +120,13 @@ const AI = (() => {
   /* ══ Confirm card for single CREATE ══ */
   function showCreateConfirm(task) {
     pendingTask = { type: 'create', task };
-    const cfg = App.store.cfg;
-    const ooh = isOutOfHours(task.start, task.end);
-    // Preview title format
-    const titlePreview = task.name + (task.tag && task.tag !== '其他' ? ' #' + task.tag : '');
+    // Prefix format preview: "#工作 写周报"
+    const titlePreview = (task.tag && task.tag !== '其他')
+      ? '#' + task.tag + ' ' + task.name
+      : task.name;
     const confirm = document.getElementById('confirmArea');
     confirm.innerHTML =
       '<div class="confirm-card">'
-      + (ooh ? '<div class="ooh-banner">⚠ 该时间段超出工作时间 (' + cfg.workStart + '–' + cfg.workEnd + ')，确认继续？</div>' : '')
       + '<div class="confirm-title">请确认创建信息</div>'
       + row('日历标题', '<span style="font-family:\'DM Mono\',monospace;font-size:12px;color:var(--accent)">' + esc(titlePreview) + '</span>')
       + row('类别', '<span class="badge badge-' + esc(task.tag) + '">' + esc(task.tag) + '</span>')
@@ -196,11 +193,13 @@ const AI = (() => {
       });
       App.saveState();
       t.remove();
-      const tagSuffix = task.tag && task.tag !== '其他' ? ' #' + task.tag : '';
-      UI.toast('✓ 已创建：' + task.name + tagSuffix, 'success');
+      const titlePreview = (task.tag && task.tag !== '其他')
+        ? '#' + task.tag + ' ' + task.name
+        : task.name;
+      UI.toast('✓ 已创建：' + titlePreview, 'success');
       document.getElementById('confirmArea').innerHTML = '';
       pendingTask = null; chatHistory = [];
-      addAIBubble('✓ 已创建「' + task.name + tagSuffix + '」（' + task.date + ' ' + task.start + '–' + task.end + '）。还需要安排其他吗？');
+      addAIBubble('✓ 已创建「' + titlePreview + '」（' + task.date + ' ' + task.start + '–' + task.end + '）。还需要安排其他吗？');
     } catch(e) {
       t.remove();
       UI.toast('创建失败：' + e.message, 'error');
@@ -249,13 +248,14 @@ const AI = (() => {
         const end   = changes.end   ? date + 'T' + changes.end   + ':00' : match.end;
         const updates = { start, end };
 
-        // Handle tag change: update summary and colorId
+        // Handle tag change: update summary (prefix format) and colorId
         if (changes.tag) {
           const newTag     = changes.tag;
-          const newSummary = match.name + (newTag && newTag !== '其他' ? ' #' + newTag : '');
+          const newSummary = (newTag && newTag !== '其他')
+            ? '#' + newTag + ' ' + match.name
+            : match.name;
           updates.summary  = newSummary;
           updates.colorId  = Cal.TAG_COLOR[newTag] || '0';
-          // Update description tag metadata
           const newDesc = (match.description || '')
             .replace(/标签：[^\n]*/g, '')
             .trim() + '\n标签：' + newTag;
@@ -351,16 +351,6 @@ const AI = (() => {
         '你是时间管理顾问，用中文回答，语气温和专业。'
       );
     } catch(e) { txt.textContent = '分析失败：' + e.message; }
-  }
-
-  /* ══ Helpers ══ */
-  function isOutOfHours(start, end) {
-    const cfg = App.store.cfg;
-    const ws  = (cfg.workStart || '09:00').replace(':', '');
-    const we  = (cfg.workEnd   || '18:00').replace(':', '');
-    const s   = start.replace(':', '');
-    const e   = end.replace(':', '');
-    return parseInt(s) < parseInt(ws) || parseInt(e) > parseInt(we);
   }
 
   function fmtMins(m) { if (!m && m !== 0) return '—'; return m < 60 ? m + '分' : (m / 60).toFixed(1) + 'h'; }

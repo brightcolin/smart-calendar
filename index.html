@@ -113,6 +113,8 @@
       <div class="card"><div class="card-label">按日历分布</div><div id="calChart"></div></div>
       <!-- By tag -->
       <div class="card"><div class="card-label">按标签分布</div><div id="barChart"></div></div>
+      <!-- Grouped by activity name -->
+      <div class="card"><div class="card-label">相同活动合并统计</div><div id="groupedChart"></div></div>
       <!-- Compare -->
       <div class="card"><div class="card-label">预估 vs 实际</div><div id="compareChart"></div></div>
       <button class="btn btn-ai" onclick="Stats.weekReport()">↗ AI 生成周报</button>
@@ -135,15 +137,7 @@
       </div>
 
       <div class="card">
-        <div class="card-label">工作时间</div>
-        <div class="settings-row">
-          <div><div class="settings-lbl">开始时间</div><div class="settings-sub">超出范围时提示</div></div>
-          <input class="form-input settings-input" type="time" id="workStart" value="09:00">
-        </div>
-        <div class="settings-row">
-          <div><div class="settings-lbl">结束时间</div></div>
-          <input class="form-input settings-input" type="time" id="workEnd" value="18:00">
-        </div>
+        <div class="card-label">提醒设置</div>
         <div class="settings-row">
           <div><div class="settings-lbl">默认提前提醒</div><div class="settings-sub">分钟</div></div>
           <input class="form-input settings-input" type="number" id="defReminder" value="10" min="0" max="120">
