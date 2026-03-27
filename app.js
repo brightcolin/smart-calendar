@@ -330,20 +330,58 @@ const Batch = {
 async function completeEvent(gcalId) {
   const e = (App.todayEvents || []).find(ev => ev.gcalId === gcalId);
   if (!e) return;
-  const actualMins = Math.round(Math.max(0, (new Date() - new Date(e.start)) / 60000));
-  const t = UI.toast('标记完成...', 'loading', 0);
-  try {
-    await Cal.markComplete(e, actualMins);
-    const local = App.store.tasks.find(t => t.gcalId === gcalId);
-    if (local) { local.done = true; local.actualMins = actualMins; App.saveState(); }
-    t.remove();
-    const diff = actualMins - (e.estMins || 0);
-    UI.toast('完成！实际 ' + fmtMins(actualMins) + ' / 预估 ' + fmtMins(e.estMins) + (diff > 0 ? ' · 超出 ' : ' · 节省 ') + fmtMins(Math.abs(diff)), 'success');
-    await Cal.loadTodayEvents();
-  } catch(err) {
-    t.remove();
-    UI.toast('操作失败：' + err.message, 'error');
-  }
+
+  // Default: now; but let user adjust
+  const now     = new Date();
+  const fmt     = d => d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  const defTime = fmt(now);
+
+  // Show completion time picker modal
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.onclick = ev => { if (ev.target === modal) modal.remove(); };
+  modal.innerHTML =
+    '<div class="modal" onclick="event.stopPropagation()">'
+    + '<div class="modal-title">标记完成</div>'
+    + '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">确认实际完成时间，可手动调整</div>'
+    + '<div class="form-row">'
+    + '<label class="form-label">完成时间（24小时制）</label>'
+    + '<input class="form-input" type="time" id="completeTimeInput" value="' + defTime + '">'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-top:12px">'
+    + '<button class="btn btn-primary" id="completeConfirmBtn">✓ 确认完成</button>'
+    + '<button class="btn" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+
+  document.getElementById('completeConfirmBtn').onclick = async () => {
+    const timeVal = document.getElementById('completeTimeInput').value;
+    modal.remove();
+
+    // Parse the selected time into a Date on the event's date
+    const eventDate = e.start ? e.start.slice(0,10) : new Date().toISOString().slice(0,10);
+    const [h, m]    = timeVal.split(':').map(Number);
+    const completeAt = new Date(eventDate + 'T' + timeVal + ':00');
+    const startDate  = new Date(e.start);
+    const actualMins = Math.round(Math.max(0, (completeAt - startDate) / 60000));
+
+    const t = UI.toast('标记完成...', 'loading', 0);
+    try {
+      await Cal.markComplete(e, actualMins, completeAt);
+      const local = App.store.tasks.find(x => x.gcalId === gcalId);
+      if (local) { local.done = true; local.actualMins = actualMins; App.saveState(); }
+      t.remove();
+      const diff = actualMins - (e.estMins || 0);
+      UI.toast('完成！实际 ' + fmtMins(actualMins) + ' / 预估 ' + fmtMins(e.estMins)
+        + (diff > 0 ? ' · 超出 ' : ' · 节省 ') + fmtMins(Math.abs(diff)), 'success');
+      await Cal.loadTodayEvents();
+      CalView.refresh();
+    } catch(err) {
+      t.remove();
+      UI.toast('操作失败：' + err.message, 'error');
+    }
+  };
 }
 
 async function deleteEvent(gcalId) {
