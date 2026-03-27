@@ -283,17 +283,17 @@ const Cal = (() => {
   }
 
   /* ══ Mark complete ══ */
-  async function markComplete(event, actualMins) {
-    const newDesc = event.description
+  async function markComplete(event, actualMins, completedAt) {
+    const endTime = completedAt instanceof Date ? completedAt : new Date();
+    const newDesc = (event.description || '')
       .replace(/实际：\d+分钟/g, '')
       .replace(/状态：已完成/g, '')
       .trim()
       + '\n实际：' + actualMins + '分钟\n状态：已完成';
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const now = new Date();
     return updateEvent(event.gcalId, {
       description: newDesc,
-      end: now.toISOString(),
+      end: endTime.toISOString(),
     });
   }
 

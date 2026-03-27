@@ -110,13 +110,19 @@ const Auth = (() => {
     localStorage.removeItem(DS_KEY);
   }
 
-  /* ══ Token refresh scheduling ══ */
+  /* ══ Token auto-refresh (silent, user never sees login prompt) ══ */
   function scheduleRefresh(email) {
     if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
-    tokenRefreshTimer = setTimeout(() => {
-      document.getElementById('tokenWarn').classList.add('visible');
-    }, TOKEN_TTL);
+    // Silently refresh at 50 min (before 60-min expiry)
+    tokenRefreshTimer = setTimeout(() => silentRefresh(email), TOKEN_TTL);
   }
+
+  async function silentRefresh(email) {
+    if (!tokenClient) return;
+    // Use prompt:'none' for silent refresh — no popup, no user interaction
+    tokenClient.requestAccessToken({ prompt: 'none', login_hint: email });
+  }
+
   function clearRefresh() {
     if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
     tokenRefreshTimer = null;
@@ -130,21 +136,29 @@ const Auth = (() => {
       client_id: GOOGLE_CLIENT_ID,
       scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
       callback: async (resp) => {
-        if (resp.error) { UI.toast('登录失败：' + resp.error, 'error'); return; }
-        await onTokenReceived(resp.access_token);
+        if (resp.error) {
+          // Silent refresh failed (e.g. user revoked) → show warning
+          if (resp.error === 'interaction_required' || resp.error === 'login_required') {
+            document.getElementById('tokenWarn').classList.add('visible');
+          } else {
+            UI.toast('登录失败：' + resp.error, 'error');
+          }
+          return;
+        }
+        const isReturning = !!activeAccountId;
+        await onTokenReceived(resp.access_token, isReturning);
       }
     });
   }
 
-  async function onTokenReceived(token) {
-    // Fetch user info
+  async function onTokenReceived(token, silent = false) {
     let userInfo;
     try {
       const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: 'Bearer ' + token }
       });
       userInfo = await r.json();
-    } catch(e) { UI.toast('获取用户信息失败', 'error'); return; }
+    } catch(e) { if (!silent) UI.toast('获取用户信息失败', 'error'); return; }
 
     const account = {
       email:   userInfo.email,
@@ -160,8 +174,11 @@ const Auth = (() => {
     document.getElementById('tokenWarn').classList.remove('visible');
     scheduleRefresh(account.email);
 
-    UI.toast('登录成功：' + account.name, 'success');
-    await App.onLogin();
+    if (!silent) {
+      UI.toast('登录成功：' + account.name, 'success');
+      await App.onLogin();
+    }
+    // If silent refresh, just update token — no UI disruption needed
   }
 
   /* ══ Public API ══ */
@@ -236,17 +253,23 @@ const Auth = (() => {
   }
 
   async function init() {
-    // Restore active account
     const saved = localStorage.getItem(ACTIVE_KEY);
     if (saved) {
       activeAccountId = saved;
       const account = await getAccount(saved);
       if (account?.token) {
-        scheduleRefresh(saved);
-        return true; // has session
+        // Check if token is still fresh (< 50 min old)
+        const age = Date.now() - (account.tokenAt || 0);
+        if (age < TOKEN_TTL) {
+          scheduleRefresh(saved);
+          return true; // token still valid
+        }
+        // Token may be expired — attempt silent refresh
+        scheduleRefresh(saved); // will fire immediately after a tick
+        return true; // still show app; silentRefresh will fix token in background
       }
     }
-    return false; // no valid session
+    return false;
   }
 
   return {
