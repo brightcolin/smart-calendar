@@ -102,6 +102,10 @@ const Cal = (() => {
       const events = (data.items || []).map(normalizeEvent);
       t.remove();
       UI.renderTodayEvents(events);
+      // Refresh pomodoro task selector if open
+      if (document.getElementById('pomodoroModal')?.classList.contains('open')) {
+        Pomodoro.init && setTimeout(Pomodoro.init, 50);
+      }
       return events;
     } catch(e) {
       t.remove();
