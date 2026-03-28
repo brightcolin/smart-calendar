@@ -52,6 +52,7 @@ const App = {
     await Cal.loadTodayEvents();
     AI.initChat();
     UI.renderAccountLists();
+    Pomodoro.init();
   },
 
   showLoginScreen() {
@@ -337,15 +338,18 @@ async function completeEvent(gcalId) {
   const defTime = fmt(now);
 
   // Show completion time picker modal
+  const startFmt = e.start ? fmt(new Date(e.start)) : '—';
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open';
   modal.onclick = ev => { if (ev.target === modal) modal.remove(); };
   modal.innerHTML =
     '<div class="modal" onclick="event.stopPropagation()">'
     + '<div class="modal-title">标记完成</div>'
-    + '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">确认实际完成时间，可手动调整</div>'
+    + '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">'
+    + esc(e.name) + '（开始：' + startFmt + '）'
+    + '</div>'
     + '<div class="form-row">'
-    + '<label class="form-label">完成时间（24小时制）</label>'
+    + '<label class="form-label">实际完成时间（24小时制）</label>'
     + '<input class="form-input" type="time" id="completeTimeInput" value="' + defTime + '">'
     + '</div>'
     + '<div style="display:flex;gap:8px;margin-top:12px">'
