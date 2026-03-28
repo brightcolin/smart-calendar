@@ -306,10 +306,10 @@ const CalView = (() => {
 
   /* ══ Quick create from empty slot ══ */
   function quickCreate(dateStr, hour) {
-    // Switch to chat tab and pre-fill
-    UI.goPage('add', document.querySelectorAll('.nav-item')[1]);
-    const h    = hour.toString().padStart(2,'0');
-    const h1   = (hour + 1).toString().padStart(2,'0');
+    // Switch to chat tab (index 0 now) and pre-fill
+    UI.goPage('add', document.querySelectorAll('.nav-item')[0]);
+    const h   = hour.toString().padStart(2,'0');
+    const h1  = (hour + 1).toString().padStart(2,'0');
     const area = document.getElementById('chatInput');
     if (area) {
       area.value = dateStr + ' ' + h + ':00–' + h1 + ':00 ';
@@ -345,32 +345,29 @@ const CalView = (() => {
 
     const acts = document.getElementById('edActions');
     acts.innerHTML = '';
-    if (!e.done) {
-      const completeBtn = document.createElement('button');
-      completeBtn.className = 'btn btn-success';
-      completeBtn.textContent = '✓ 完成';
-      completeBtn.onclick = async () => {
-        UI.closeModal('eventDetailModal');
-        await completeEvent(e.gcalId);
-        await refresh();
-      };
-      acts.appendChild(completeBtn);
-    }
+
+    // Tag editor
     const editBtn = document.createElement('button');
     editBtn.className = 'btn';
-    editBtn.textContent = '编辑标签';
+    editBtn.textContent = '改标签';
     editBtn.onclick = () => { UI.closeModal('eventDetailModal'); openTagEditor(e.gcalId); };
     acts.appendChild(editBtn);
 
-    const delBtn = document.createElement('button');
-    delBtn.className = 'btn btn-danger';
-    delBtn.textContent = '删除';
-    delBtn.onclick = async () => {
+    // Go to chat to operate on this event via NL
+    const chatBtn = document.createElement('button');
+    chatBtn.className = 'btn btn-primary';
+    chatBtn.textContent = '对话操作';
+    chatBtn.onclick = () => {
       UI.closeModal('eventDetailModal');
-      await deleteEvent(e.gcalId);
-      await refresh();
+      UI.goPage('add', document.querySelectorAll('.nav-item')[0]);
+      const input = document.getElementById('chatInput');
+      if (input) {
+        input.value = '「' + e.name + '」';
+        input.focus();
+        autoResize(input);
+      }
     };
-    acts.appendChild(delBtn);
+    acts.appendChild(chatBtn);
 
     modal.classList.add('open');
   }

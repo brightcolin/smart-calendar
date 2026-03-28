@@ -64,22 +64,12 @@
   <div class="main-app" id="mainApp" style="display:none">
 
     <!-- ── Today ── -->
-    <div class="page active" id="page-today">
+    <div class="page" id="page-today">
       <div class="page-toolbar">
         <span class="page-date" id="todayLabel"></span>
         <div class="toolbar-actions">
           <button class="btn btn-sm" id="pomodoroFloatBtn" onclick="Pomodoro.open()" title="番茄钟">🍅</button>
-          <button class="btn btn-sm" onclick="UI.toggleBatchMode()" id="batchToggleBtn">批量</button>
           <button class="btn btn-sm" onclick="Cal.loadTodayEvents()" id="refreshBtn">刷新</button>
-        </div>
-      </div>
-      <!-- Batch action bar -->
-      <div class="batch-bar" id="batchBar" style="display:none">
-        <span id="batchCount">已选 0 项</span>
-        <div class="batch-actions">
-          <button class="btn btn-sm btn-success" onclick="Batch.completeSelected()">完成</button>
-          <button class="btn btn-sm" onclick="Batch.rescheduleSelected()">改时间</button>
-          <button class="btn btn-sm btn-danger" onclick="Batch.deleteSelected()">删除</button>
         </div>
       </div>
       <div id="todayEventList"></div>
@@ -87,8 +77,8 @@
       <div class="ai-box" id="aiTodayBox"><div class="ai-label">DEEPSEEK · 分析</div><div id="aiTodayText"></div></div>
     </div>
 
-    <!-- ── Create / Chat ── -->
-    <div class="page" id="page-add">
+    <!-- ── Chat (default page) ── -->
+    <div class="page active" id="page-add">
       <div id="chatArea" class="chat-area"></div>
       <div id="confirmArea"></div>
       <div class="chat-input-wrap">
@@ -192,8 +182,8 @@
 
 <!-- ══ Bottom Nav ══ -->
 <nav class="bottom-nav" id="bottomNav" style="display:none">
-  <button class="nav-item active" onclick="UI.goPage('today',this)"><span class="nav-icon">☀</span>今日</button>
-  <button class="nav-item" onclick="UI.goPage('add',this)"><span class="nav-icon">＋</span>创建</button>
+  <button class="nav-item active" onclick="UI.goPage('add',this)"><span class="nav-icon">💬</span>对话</button>
+  <button class="nav-item" onclick="UI.goPage('today',this)"><span class="nav-icon">☀</span>今日</button>
   <button class="nav-item" onclick="UI.goPage('cal',this)"><span class="nav-icon">▦</span>日历</button>
   <button class="nav-item" onclick="UI.goPage('stats',this)"><span class="nav-icon">◎</span>统计</button>
   <button class="nav-item" onclick="UI.goPage('settings',this)"><span class="nav-icon">⚙</span>设置</button>
@@ -215,25 +205,6 @@
   <div class="modal" onclick="e=>e.stopPropagation()">
     <div class="modal-title">选择日历</div>
     <div id="calModalList"></div>
-  </div>
-</div>
-
-<!-- Reschedule modal -->
-<div class="modal-overlay" id="rescheduleModal" onclick="UI.closeModal('rescheduleModal')">
-  <div class="modal" onclick="e=>e.stopPropagation()">
-    <div class="modal-title">修改时间</div>
-    <div class="form-row">
-      <label class="form-label">新开始时间</label>
-      <input class="form-input" type="datetime-local" id="rescheduleStart">
-    </div>
-    <div class="form-row">
-      <label class="form-label">新结束时间</label>
-      <input class="form-input" type="datetime-local" id="rescheduleEnd">
-    </div>
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn btn-primary" onclick="Batch.applyReschedule()">确认</button>
-      <button class="btn" onclick="UI.closeModal('rescheduleModal')">取消</button>
-    </div>
   </div>
 </div>
 

@@ -350,3 +350,18 @@ select.form-input option { background: var(--bg3); }
 .pomo-log-entry { padding:1px 0; }
 .pomo-log-entry.focus { color:var(--accent); }
 .pomo-log-entry.brk   { color:var(--green); }
+
+/* ══ Inline result cards (chat) ══ */
+.result-card { background:var(--bg3); border:0.5px solid rgba(200,169,110,0.3); border-radius:var(--radius); padding:10px 13px; max-width:82%; }
+.result-row { display:flex; justify-content:space-between; gap:8px; padding:4px 0; border-bottom:0.5px solid var(--border); font-size:12px; }
+.result-row:last-of-type { border-bottom:none; }
+.result-key { color:var(--text2); flex-shrink:0; }
+.result-val { color:var(--text); text-align:right; }
+.result-actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+
+/* ══ Query result items ══ */
+.query-item { display:flex; align-items:center; gap:7px; padding:4px 0; border-bottom:0.5px solid var(--border); font-size:13px; }
+.query-item:last-child { border-bottom:none; }
+.query-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.query-time { font-family:'DM Mono',monospace; font-size:11px; color:var(--text2); width:38px; flex-shrink:0; }
+.query-name { flex:1; min-width:0; }

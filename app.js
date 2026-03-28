@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   app.js — Main orchestrator, UI helpers, Batch ops
+   app.js — Main orchestrator, UI helpers
 ═══════════════════════════════════════════════════ */
 
 /* ══ CONFIG — replace with your Client ID ══ */
@@ -7,9 +7,7 @@ const GOOGLE_CLIENT_ID = '1097763862-q0struuoppg5hl2ed7jsmb1or59g8jj9.apps.googl
 
 /* ══ App state ══ */
 const App = {
-  todayEvents: [],   // events loaded from Google Calendar today
-  batchMode:   false,
-  selectedIds: new Set(),
+  todayEvents: [],
 
   store: {
     tasks: [],
@@ -53,6 +51,8 @@ const App = {
     AI.initChat();
     UI.renderAccountLists();
     Pomodoro.init();
+    // Default to chat page
+    UI.goPage('add', document.querySelector('.nav-item'));
   },
 
   showLoginScreen() {
@@ -97,7 +97,7 @@ const UI = {
     App.todayEvents = events;
     const el = document.getElementById('todayEventList');
     if (!events.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">◌</div>今天日历中暂无事件<br><span style="font-size:12px;margin-top:4px;display:block;color:var(--text3)">点击下方「+」用自然语言创建</span></div>';
+      el.innerHTML = '<div class="empty"><div class="empty-icon">◌</div>今天日历中暂无事件<br><span style="font-size:12px;margin-top:4px;display:block;color:var(--text3)">在「对话」页用自然语言创建</span></div>';
       return;
     }
     // Group: incomplete first, then complete
@@ -114,27 +114,6 @@ const UI = {
       html += complete.map(e => eventCard(e)).join('');
     }
     el.innerHTML = html;
-  },
-
-  /* ── Batch mode ── */
-  toggleBatchMode() {
-    App.batchMode = !App.batchMode;
-    App.selectedIds.clear();
-    document.getElementById('batchBar').style.display  = App.batchMode ? 'flex' : 'none';
-    document.getElementById('batchToggleBtn').textContent = App.batchMode ? '退出批量' : '批量';
-    document.getElementById('batchToggleBtn').style.color = App.batchMode ? 'var(--accent)' : '';
-    Cal.loadTodayEvents();
-  },
-
-  toggleEventSelect(gcalId) {
-    if (App.selectedIds.has(gcalId)) App.selectedIds.delete(gcalId);
-    else App.selectedIds.add(gcalId);
-    document.getElementById('batchCount').textContent = '已选 ' + App.selectedIds.size + ' 项';
-    // Update checkbox UI
-    const cb = document.getElementById('cb-' + gcalId);
-    if (cb) cb.classList.toggle('checked', App.selectedIds.has(gcalId));
-    const card = document.querySelector('[data-gcalid="' + gcalId + '"]');
-    if (card) card.classList.toggle('selected', App.selectedIds.has(gcalId));
   },
 
   /* ── Modals ── */
@@ -245,171 +224,10 @@ const UI = {
   },
 };
 
-/* ══ Batch operations ══ */
-const Batch = {
-  getSelectedEvents() {
-    return (App.todayEvents || []).filter(e => App.selectedIds.has(e.gcalId));
-  },
-
-  async completeSelected() {
-    const events = this.getSelectedEvents().filter(e => !e.done);
-    if (!events.length) { UI.toast('请先选择未完成的任务', 'info'); return; }
-    const t = UI.toast('批量标记完成...', 'loading', 0);
-    let ok = 0;
-    for (const e of events) {
-      try {
-        const actualMins = Math.round((new Date() - new Date(e.start)) / 60000);
-        await Cal.markComplete(e, Math.max(0, actualMins));
-        ok++;
-      } catch(err) {}
-    }
-    t.remove();
-    UI.toast('已完成 ' + ok + ' 个任务', 'success');
-    App.selectedIds.clear();
-    document.getElementById('batchCount').textContent = '已选 0 项';
-    await Cal.loadTodayEvents();
-  },
-
-  rescheduleSelected() {
-    if (!App.selectedIds.size) { UI.toast('请先选择任务', 'info'); return; }
-    // Pre-fill with first event's time
-    const first = this.getSelectedEvents()[0];
-    if (first?.start) {
-      const d = new Date(first.start);
-      document.getElementById('rescheduleStart').value = d.toISOString().slice(0, 16);
-      const d2 = new Date(first.end);
-      document.getElementById('rescheduleEnd').value = d2.toISOString().slice(0, 16);
-    }
-    document.getElementById('rescheduleModal').classList.add('open');
-  },
-
-  async applyReschedule() {
-    const start = document.getElementById('rescheduleStart').value;
-    const end   = document.getElementById('rescheduleEnd').value;
-    if (!start || !end) { UI.toast('请填写开始和结束时间', 'error'); return; }
-    const events = this.getSelectedEvents();
-    const t = UI.toast('批量修改时间...', 'loading', 0);
-    let ok = 0;
-    for (const e of events) {
-      try {
-        await Cal.updateEvent(e.gcalId, {
-          start: new Date(start).toISOString(),
-          end:   new Date(end).toISOString(),
-        });
-        ok++;
-      } catch(err) {}
-    }
-    t.remove();
-    UI.toast('已修改 ' + ok + ' 个任务的时间', 'success');
-    UI.closeModal('rescheduleModal');
-    App.selectedIds.clear();
-    document.getElementById('batchCount').textContent = '已选 0 项';
-    await Cal.loadTodayEvents();
-  },
-
-  async deleteSelected() {
-    const events = this.getSelectedEvents();
-    if (!events.length) { UI.toast('请先选择任务', 'info'); return; }
-    if (!confirm('确定删除选中的 ' + events.length + ' 个任务？此操作不可撤销。')) return;
-    const t = UI.toast('批量删除...', 'loading', 0);
-    let ok = 0;
-    for (const e of events) {
-      try { await Cal.deleteEvent(e.gcalId); ok++; } catch(err) {}
-    }
-    // Clean local store
-    const ids = new Set(events.map(e => e.gcalId));
-    App.store.tasks = App.store.tasks.filter(t => !ids.has(t.gcalId));
-    App.saveState();
-    t.remove();
-    UI.toast('已删除 ' + ok + ' 个任务', 'success');
-    App.selectedIds.clear();
-    await Cal.loadTodayEvents();
-  },
-};
-
-/* ══ Individual event actions ══ */
-async function completeEvent(gcalId) {
-  const e = (App.todayEvents || []).find(ev => ev.gcalId === gcalId);
-  if (!e) return;
-
-  // Default: now; but let user adjust
-  const now     = new Date();
-  const fmt     = d => d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
-  const defTime = fmt(now);
-
-  // Show completion time picker modal
-  const startFmt = e.start ? fmt(new Date(e.start)) : '—';
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay open';
-  modal.onclick = ev => { if (ev.target === modal) modal.remove(); };
-  modal.innerHTML =
-    '<div class="modal" onclick="event.stopPropagation()">'
-    + '<div class="modal-title">标记完成</div>'
-    + '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">'
-    + esc(e.name) + '（开始：' + startFmt + '）'
-    + '</div>'
-    + '<div class="form-row">'
-    + '<label class="form-label">实际完成时间（24小时制）</label>'
-    + '<input class="form-input" type="time" id="completeTimeInput" value="' + defTime + '">'
-    + '</div>'
-    + '<div style="display:flex;gap:8px;margin-top:12px">'
-    + '<button class="btn btn-primary" id="completeConfirmBtn">✓ 确认完成</button>'
-    + '<button class="btn" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>'
-    + '</div>'
-    + '</div>';
-  document.body.appendChild(modal);
-
-  document.getElementById('completeConfirmBtn').onclick = async () => {
-    const timeVal = document.getElementById('completeTimeInput').value;
-    modal.remove();
-
-    // Parse the selected time into a Date on the event's date
-    const eventDate = e.start ? e.start.slice(0,10) : new Date().toISOString().slice(0,10);
-    const [h, m]    = timeVal.split(':').map(Number);
-    const completeAt = new Date(eventDate + 'T' + timeVal + ':00');
-    const startDate  = new Date(e.start);
-    const actualMins = Math.round(Math.max(0, (completeAt - startDate) / 60000));
-
-    const t = UI.toast('标记完成...', 'loading', 0);
-    try {
-      await Cal.markComplete(e, actualMins, completeAt);
-      const local = App.store.tasks.find(x => x.gcalId === gcalId);
-      if (local) { local.done = true; local.actualMins = actualMins; App.saveState(); }
-      t.remove();
-      const diff = actualMins - (e.estMins || 0);
-      UI.toast('完成！实际 ' + fmtMins(actualMins) + ' / 预估 ' + fmtMins(e.estMins)
-        + (diff > 0 ? ' · 超出 ' : ' · 节省 ') + fmtMins(Math.abs(diff)), 'success');
-      await Cal.loadTodayEvents();
-      CalView.refresh();
-    } catch(err) {
-      t.remove();
-      UI.toast('操作失败：' + err.message, 'error');
-    }
-  };
-}
-
-async function deleteEvent(gcalId) {
-  if (!confirm('确定删除这个任务？')) return;
-  const t = UI.toast('删除中...', 'loading', 0);
-  try {
-    await Cal.deleteEvent(gcalId);
-    App.store.tasks = App.store.tasks.filter(x => x.gcalId !== gcalId);
-    App.saveState();
-    t.remove();
-    UI.toast('已删除', 'success');
-    await Cal.loadTodayEvents();
-  } catch(e) {
-    t.remove();
-    UI.toast('删除失败：' + e.message, 'error');
-  }
-}
-
 /* ══ Event card renderer ══ */
 function eventCard(e) {
-  const color      = Cal.TAG_HEX[e.tag] || '#9a9690';
-  const isSelected = App.selectedIds.has(e.gcalId);
-  // 24-hour format: HH:MM
-  const fmt24 = dt => {
+  const color   = Cal.TAG_HEX[e.tag] || '#9a9690';
+  const fmt24   = dt => {
     if (!dt) return '—';
     const d = new Date(dt);
     return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
@@ -418,32 +236,20 @@ function eventCard(e) {
   const endStr   = fmt24(e.end);
   const diff     = e.actualMins != null ? e.actualMins - (e.estMins || 0) : null;
 
-  return '<div class="event-item ' + (e.done ? 'done' : '') + (isSelected ? ' selected' : '') + '" data-gcalid="' + esc(e.gcalId) + '">'
-    // Left color bar (clickable to edit tag/color)
-    + '<div class="event-color-bar" style="background:' + color + ';cursor:pointer" onclick="openTagEditor(\'' + esc(e.gcalId) + '\')" title="点击修改标签和颜色"></div>'
+  return '<div class="event-item ' + (e.done ? 'done' : '') + '" data-gcalid="' + esc(e.gcalId) + '">'
+    + '<div class="event-color-bar" style="background:' + color + ';cursor:pointer" onclick="openTagEditor(\'' + esc(e.gcalId) + '\')" title="点击修改标签"></div>'
     + '<div class="event-inner">'
     + '<div class="event-header">'
-    + (App.batchMode
-        ? '<div class="event-checkbox ' + (isSelected ? 'checked' : '') + '" id="cb-' + esc(e.gcalId) + '" onclick="UI.toggleEventSelect(\'' + esc(e.gcalId) + '\')"></div>'
-        : '')
     + '<div style="flex:1;min-width:0">'
     + '<div class="event-name">' + esc(e.name) + '</div>'
     + '<div class="event-meta">' + startStr + ' – ' + endStr + ' · 预估 ' + fmtMins(e.estMins) + '</div>'
-    + (e.description ? '<div class="event-desc">' + esc(e.description.slice(0, 80)) + (e.description.length > 80 ? '…' : '') + '</div>' : '')
+    + (e.description ? '<div class="event-desc">' + esc(e.description.slice(0, 80)) + '</div>' : '')
     + (diff != null ? '<div class="event-actual ' + (diff > 0 ? 'over' : '') + '">实际 ' + fmtMins(e.actualMins) + ' · ' + (diff > 0 ? '超出 ' : '节省 ') + fmtMins(Math.abs(diff)) + '</div>' : '')
     + '</div>'
-    // Tag badge with color dot — clickable to edit
     + '<span class="badge badge-' + esc(e.tag) + '" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="openTagEditor(\'' + esc(e.gcalId) + '\')">'
     + '<span style="width:7px;height:7px;border-radius:50%;background:' + color + ';display:inline-block;flex-shrink:0"></span>'
-    + esc(e.tag)
-    + '</span>'
+    + esc(e.tag) + '</span>'
     + '</div>'
-    + (!e.done && !App.batchMode
-        ? '<div class="event-actions">'
-          + '<button class="btn btn-sm btn-success" onclick="completeEvent(\'' + esc(e.gcalId) + '\')">✓ 完成</button>'
-          + '<button class="btn btn-sm btn-danger" onclick="deleteEvent(\'' + esc(e.gcalId) + '\')">删除</button>'
-          + '</div>'
-        : '')
     + '</div></div>';
 }
 
