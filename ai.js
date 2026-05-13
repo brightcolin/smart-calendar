@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════
-   ai.js — Pure natural language interface
-   • create / modify / query — all in one chat
+   ai.js — Natural language interface + Secretary brain
+   • create / modify / query / plan — all in one chat
+   • Secretary rules for intelligent scheduling
    • No confirm cards for simple ops; undo toast instead
    • Inline result cards in chat (no page switching)
-   • Query support: today / tomorrow / this_week / date
 ═══════════════════════════════════════════════════ */
 
 const AI = (() => {
@@ -11,12 +11,13 @@ const AI = (() => {
   const DS_MODEL = 'deepseek-chat';
 
   let chatHistory = [];
-  let lastCreated = null;   // for follow-up "刚才那个"
-  let lastUndo    = null;   // for undo after delete/modify
+  let lastCreated = null;
+  let lastUndo    = null;
   let dsKey       = '';
+  let _pendingPlan = null;
 
   /* ══ DeepSeek call ══ */
-  async function callDS(messages, systemPrompt, maxTokens = 900) {
+  async function callDS(messages, systemPrompt, maxTokens = 1200) {
     if (!dsKey) {
       dsKey = (await Auth.loadDeepSeekKey()) || '';
       const input = document.getElementById('apiKey');
@@ -39,7 +40,29 @@ const AI = (() => {
     return d.choices?.[0]?.message?.content || '';
   }
 
-  /* ══ System prompt ══ */
+  /* ══ Load upcoming events for plan context ══ */
+  async function loadUpcomingContext(days) {
+    try {
+      const today = new Date();
+      const end   = new Date(today);
+      end.setDate(end.getDate() + (days || 3));
+      const events = await Cal.loadEventsRange(
+        today.toISOString().slice(0, 10),
+        end.toISOString().slice(0, 10)
+      );
+      if (!events.length) return '（未来' + (days||3) + '天暂无已知活动）';
+      return events.map((e, i) => {
+        const d = e.start ? new Date(e.start) : null;
+        const dateStr = d ? d.toISOString().slice(0, 10) : '?';
+        const timeStr = fmtEventTime(e);
+        return (i+1) + '. ' + dateStr + ' ' + timeStr + ' "' + e.name + '"'
+          + (e.tag && e.tag !== '其他' ? ' #' + e.tag : '')
+          + (e.done ? ' [已完成]' : '');
+      }).join('\n');
+    } catch(e) { return '（加载失败）'; }
+  }
+
+  /* ══ System prompt — with secretary rules ══ */
   function buildSystemPrompt() {
     const cfg      = App.store.cfg;
     const now      = new Date();
@@ -47,6 +70,7 @@ const AI = (() => {
     const nowStr   = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
     const tz       = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const weekDays = ['日','一','二','三','四','五','六'];
+    const todayWeekday = weekDays[now.getDay()];
 
     const dateRef = [];
     for (let i = -7; i < 14; i++) {
@@ -64,10 +88,11 @@ const AI = (() => {
       ? '\n【最近创建】"' + lastCreated.name + '" ' + lastCreated.date + ' ' + lastCreated.start + '–' + lastCreated.end
       : '';
 
-    return `你是智能日历助手，支持创建、修改、查询 Google Calendar 活动。
+    return `你是智能日历助手兼私人秘书，支持创建、修改、查询、规划 Google Calendar 活动。
+你不仅执行指令，还会根据秘书守则做出智能判断。
 
 【基本信息】
-今天：${today}（周${weekDays[now.getDay()]}），当前时间：${nowStr}，时区：${tz}
+今天：${today}（周${todayWeekday}），当前时间：${nowStr}，时区：${tz}
 默认提前提醒：${cfg.defReminder||10}分钟，方式：${cfg.defReminderMethod||'popup'}
 日期参考（含过去7天）：${dateRef.join(' | ')}
 
@@ -77,26 +102,87 @@ ${todayList}${lastCtx}
 【标签】学习|课程|科研|社工|运动|娱乐|工作|其他
 格式：#标签 活动名（如 "#工作 写周报"），标签为"其他"时直接写活动名
 
-【输出规则】只输出合法 JSON，不输出任何其他文字。
+═══════ 秘书守则 ═══════
+
+【作息框架】
+- 周一/二/三起床7:00，周四至周日起床8:00
+- 最早可安排任务：起床后30分钟
+- 午休区（勿安排）：12:15–13:30
+- 12:30和23:30有固定"信息"提醒，不可覆盖
+- 运动窗口（优先保留）：17:00–18:00
+- 晚间主力学习区：19:00–23:00
+- 硬截止：00:00，绝不安排跨午夜任务
+
+【课程表（固定不可移动）】
+周一：08:00-09:35物理 | 09:50-12:15微积分 | 13:30-15:05心理训练
+周二：08:00-09:35近现代史 | 09:50-11:25英语读写 | 13:30-15:05 OOP
+周三：08:00-09:35微积分 | 13:30-15:05英语听说
+周四：09:50-12:15物理
+周五：09:50-11:25体育 | 13:30-15:05高代 | 19:25-20:55微积分习题课
+
+【可用空闲时段（按优先级）】
+1. 周四下午13:30-17:00（最大连续空闲块，适合深度任务）
+2. 周末全天（需保留运动时间）
+3. 周三上午10:00-12:15
+4. 周五下午15:05-17:00
+5. 每天晚间19:00-23:00（主力自学区，周五有习题课占19:25-20:55）
+
+【时间块设定】
+- 标准学习单元=90-120分钟，两个单元之间至少留30分钟缓冲
+- 短任务=30-45分钟，不安排超过150分钟连续任务
+
+【时段×任务类型匹配】
+- 上午课间/课后：趁热复习刚上完的课、短作业
+- 下午15:00-17:00：编程作业、科研深度阅读、项目工作
+- 晚间19:00-21:00：高强度学习（微积分、物理、编程）
+- 晚间21:00-23:00：中低强度（论文阅读、项目推广、自媒体）
+- 22:00之后：仅轻度任务（阅读、信息整理）
+
+【优先级排序（考试季）】
+1. 课程复习和作业（微积分>物理>高代>英语>其他）
+2. 科研（论文阅读、导师沟通）
+3. 竞赛/项目（RoboMaster、黑客松）
+4. 自媒体/项目推广
+5. 杂事和社交
+
+【六条主线每周目标】
+学习：弹性，考试季30h+ | 科研（强化学习）：6-8h，需连续2h+深度块
+RoboMaster视控组：待定 | 自媒体/项目推广：3-4h，每2-3天1次1h
+竞赛：3-5h | 运动：3-4h，下午17:00-18:00
+
+═══════ 输出规则 ═══════
+
+只输出合法 JSON，不输出任何其他文字。
 
 ━━━ 创建 ━━━
-用户要安排新活动时（周期性描述只创建第一个时间点）：
 {"action":"create","task":{"name":"活动名（30字内，不含#标签）","tag":"标签","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","reminder":分钟数,"reminderMethod":"popup|email","description":"备注或空字符串"},"summary":"一句话确认（24小时制）"}
 
+创建时须遵守秘书守则：
+- 用户只说"安排物理复习"不说时间→根据当前星期几和课程表自动选最优空闲时段
+- 检查是否与课程/已有事件冲突
+- 遵守时段×任务类型匹配规则
+- 尊重午休区、运动窗口等保护时段
+
 ━━━ 修改 ━━━
-用户明确要改/推迟/提前/删除/完成/更新已有活动时（可跨日期）：
 {"action":"modify","intent":"reschedule|complete|delete|update","target":"活动名关键词","searchDate":"YYYY-MM-DD（可选）","changes":{"start":"HH:MM","end":"HH:MM","date":"YYYY-MM-DD","tag":"新标签","description":"新描述","reminder":分钟数,"reminderMethod":"popup|email"},"summary":"一句话说明"}
 
 ━━━ 查询 ━━━
-用户问"今天有什么""明天安排""本周有几个会议""下周五有什么"等：
 {"action":"query","range":"today|tomorrow|this_week|date","date":"YYYY-MM-DD（range=date时填）","summary":"正在查询什么"}
 
+━━━ 规划 ━━━
+用户说"帮我规划/安排一下明天/这周"或列出多个任务要排进日历时：
+{"action":"plan","tasks":[
+  {"name":"活动名","tag":"标签","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","reminder":10,"reminderMethod":"popup","description":"备注"},
+  ...
+],"reasoning":"排期思路：为什么这样排，考虑了哪些冲突和规则","summary":"一句话概述"}
+
+规划时须严格遵守秘书守则，说明排期理由。
+
 ━━━ 反问 ━━━
-创建时缺少时间或时长，一次只问一个问题：
 {"action":"ask","question":"问题"}
 
 ━━━ 时间解析 ━━━
-相对日期：今天=${today}，明天/后天依次+1，本周X/下周X查日期参考，X天前/后同理
+相对日期：今天=${today}，明天/后天依次+1，本周X/下周X查日期参考
 模糊时间：早上→08:00，上午→09:00，中午→12:00，下午→14:00，傍晚→18:00，晚上→19:00，深夜→22:00
 模糊时长：半小时→30分，一小时→60分，一个半→90分，没说→反问
 
@@ -104,7 +190,8 @@ ${todayList}${lastCtx}
 1. "今天下午做某事" → 创建，不是修改
 2. 只有明确说"改/推迟/删除/完成+活动名" → 修改
 3. 上轮刚创建，用户说"帮刚才那个加备注" → 修改lastCreated
-4. 所有时间用24小时制`;
+4. 所有时间用24小时制
+5. "帮我规划/安排一下" → plan动作，不是create`;
   }
 
   /* ══ Chat UI ══ */
@@ -112,17 +199,18 @@ ${todayList}${lastCtx}
     chatHistory = [];
     lastCreated = null;
     lastUndo    = null;
+    _pendingPlan = null;
     const area    = document.getElementById('chatArea');
     const confirm = document.getElementById('confirmArea');
     if (area)    area.innerHTML    = '';
     if (confirm) confirm.innerHTML = '';
     addAIBubble(
-      '你好！直接告诉我要安排什么，或者问我日历上的安排。\n\n'
+      '你好！我是你的私人秘书。直接告诉我要安排什么，我会根据你的课表和偏好智能排期。\n\n'
       + '例如：\n'
-      + '「#工作 明天14:00开会一小时」\n'
+      + '「安排物理复习」自动找最优时段\n'
+      + '「帮我规划明天」批量安排整天\n'
       + '「今天有什么安排？」\n'
-      + '「把今天的会议推迟到16:00」\n'
-      + '「标记写周报已完成」'
+      + '「把今天的会议推迟到16:00」'
     );
   }
 
@@ -162,7 +250,6 @@ ${todayList}${lastCtx}
     return el;
   }
 
-  /* Inline result card shown in chat after create/modify */
   function addResultCard(fields, actions) {
     const area = document.getElementById('chatArea');
     if (!area) return;
@@ -184,7 +271,6 @@ ${todayList}${lastCtx}
     el.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
 
-  /* Query result list shown inline */
   function addQueryResult(events, header) {
     const area = document.getElementById('chatArea');
     if (!area) return;
@@ -219,6 +305,22 @@ ${todayList}${lastCtx}
     const input = document.getElementById('chatInput');
     const text  = input?.value.trim();
     if (!text) return;
+
+    // Handle pending plan confirmation
+    if (_pendingPlan && /^(确认|好|行|可以|是|ok|yes|创建|执行)/i.test(text)) {
+      input.value = '';
+      autoResize(input);
+      addUserBubble(text);
+      const tasks = _pendingPlan;
+      _pendingPlan = null;
+      await executePlan(tasks);
+      return;
+    }
+    if (_pendingPlan && /^(调整|不|取消|重新|算了|no)/i.test(text)) {
+      _pendingPlan = null;
+      // Fall through to normal flow
+    }
+
     input.value = '';
     autoResize(input);
     addUserBubble(text);
@@ -229,7 +331,16 @@ ${todayList}${lastCtx}
     const sendBtn = document.getElementById('sendBtn');
     if (sendBtn) sendBtn.disabled = true;
     try {
-      const reply = await callDS(chatHistory, buildSystemPrompt());
+      // For plan requests, load upcoming events into context
+      const isPlanLike = /规划|安排.{0,4}(明天|后天|这周|下周|今天)|排.{0,2}计划|批量/.test(text);
+      let extraContext = '';
+      if (isPlanLike) {
+        const upcoming = await loadUpcomingContext(7);
+        extraContext = '\n\n【未来7天已有活动】\n' + upcoming;
+      }
+
+      const prompt = buildSystemPrompt() + extraContext;
+      const reply = await callDS(chatHistory, prompt);
       if (thinkEl) thinkEl.remove();
       chatHistory.push({ role: 'assistant', content: reply });
 
@@ -242,20 +353,12 @@ ${todayList}${lastCtx}
       }
 
       switch (parsed.action) {
-        case 'ask':
-          addAIBubble(parsed.question);
-          break;
-        case 'create':
-          await handleCreate(parsed);
-          break;
-        case 'modify':
-          await handleModify(parsed);
-          break;
-        case 'query':
-          await handleQuery(parsed);
-          break;
-        default:
-          addAIBubble(reply || '收到，还有其他需要吗？');
+        case 'ask':    addAIBubble(parsed.question); break;
+        case 'create': await handleCreate(parsed);   break;
+        case 'modify': await handleModify(parsed);   break;
+        case 'query':  await handleQuery(parsed);    break;
+        case 'plan':   await handlePlan(parsed);     break;
+        default:       addAIBubble(reply || '收到，还有其他需要吗？');
       }
     } catch(e) {
       if (thinkEl) thinkEl.remove();
@@ -265,7 +368,7 @@ ${todayList}${lastCtx}
     }
   }
 
-  /* ══ Handle CREATE — direct, no confirm card ══ */
+  /* ══ Handle CREATE ══ */
   async function handleCreate(parsed) {
     const task = parsed.task;
     if (!task) return;
@@ -281,7 +384,6 @@ ${todayList}${lastCtx}
       App.saveState();
       t.remove();
       const title = (task.tag && task.tag !== '其他') ? '#' + task.tag + ' ' + task.name : task.name;
-      // Inline result card
       addResultCard([
         ['活动', title],
         ['日期', task.date],
@@ -291,6 +393,8 @@ ${todayList}${lastCtx}
         { label: '撤销', cls: 'btn-danger', fn: 'AI.undoCreate()' },
         { label: '查看今日', cls: '', fn: 'UI.goPage("today",document.querySelectorAll(".nav-item")[0])' },
       ]);
+      // Show summary if AI auto-selected time
+      if (parsed.summary) addAIBubble(parsed.summary);
       chatHistory.push({ role: 'assistant', content: JSON.stringify({ _note: 'created', name: task.name, date: task.date }) });
       await Cal.loadTodayEvents();
       CalView.refresh();
@@ -300,12 +404,11 @@ ${todayList}${lastCtx}
     }
   }
 
-  /* ══ Handle MODIFY — direct, undo instead of confirm ══ */
+  /* ══ Handle MODIFY ══ */
   async function handleModify(parsed) {
     const { intent, target, changes, searchDate } = parsed;
     const t = UI.toast('处理中...', 'loading', 0);
     try {
-      // Find event: today list → lastCreated → API search
       const fuzzy = (a, b) => {
         a = (a||'').toLowerCase(); b = (b||'').toLowerCase();
         return a.includes(b) || b.includes(a);
@@ -326,7 +429,6 @@ ${todayList}${lastCtx}
         return;
       }
 
-      // Save undo snapshot
       lastUndo = { intent, match: { ...match } };
 
       if (intent === 'complete') {
@@ -340,7 +442,6 @@ ${todayList}${lastCtx}
           ['实际耗时', fmtMins(actualMins)],
           ['预估耗时', fmtMins(match.estMins)],
         ]);
-
       } else if (intent === 'delete') {
         await Cal.deleteEvent(match.gcalId);
         App.store.tasks = App.store.tasks.filter(x => x.gcalId !== match.gcalId);
@@ -350,9 +451,7 @@ ${todayList}${lastCtx}
         addResultCard([
           ['✓ 已删除', match.name],
         ], [{ label: '撤销', cls: 'btn-danger', fn: 'AI.undoDelete()' }]);
-
       } else {
-        // reschedule / update
         const date  = changes.date  || (match.start ? match.start.slice(0,10) : Cal.todayStr());
         const start = changes.start ? date + 'T' + changes.start + ':00' : match.start;
         const end   = changes.end   ? date + 'T' + changes.end   + ':00' : match.end;
@@ -391,7 +490,7 @@ ${todayList}${lastCtx}
     }
   }
 
-  /* ══ Handle QUERY — fetch and display inline ══ */
+  /* ══ Handle QUERY ══ */
   async function handleQuery(parsed) {
     const t = UI.toast('查询中...', 'loading', 0);
     try {
@@ -427,6 +526,66 @@ ${todayList}${lastCtx}
     }
   }
 
+  /* ══ Handle PLAN — show proposal, wait for confirmation ══ */
+  async function handlePlan(parsed) {
+    const { tasks, reasoning, summary } = parsed;
+    if (!tasks?.length) {
+      addAIBubble(reasoning || '没有需要安排的任务。');
+      return;
+    }
+
+    const reasonText = '📋 ' + (summary || '规划方案') + '\n\n'
+      + '💡 ' + (reasoning || '') + '\n\n'
+      + tasks.map((t, i) =>
+          (i+1) + '. ' + t.date + ' ' + t.start + '–' + t.end
+          + ' ' + (t.tag !== '其他' ? '#' + t.tag + ' ' : '') + t.name
+        ).join('\n')
+      + '\n\n回复「确认」创建，或告诉我要调整什么。';
+
+    addAIBubble(reasonText);
+    _pendingPlan = tasks;
+    chatHistory.push({ role: 'assistant', content: JSON.stringify({ _note: 'plan_pending', count: tasks.length }) });
+  }
+
+  /* ══ Execute confirmed plan ══ */
+  async function executePlan(tasks) {
+    const t = UI.toast('正在批量创建 ' + tasks.length + ' 个任务...', 'loading', 0);
+    try {
+      const results = await Cal.createEventsBatch(tasks);
+      const okCount   = results.filter(r => r.ok).length;
+      const failCount = results.filter(r => !r.ok).length;
+
+      results.filter(r => r.ok).forEach(r => {
+        const task = r.task;
+        App.store.tasks.push({
+          id: Date.now() + Math.random(), gcalId: r.gcalId, ...task,
+          estMins: Cal.calcMins(task.start, task.end),
+          done: false, actualMins: null, calendarId: Cal.activeCalendarId,
+        });
+      });
+      App.saveState();
+      t.remove();
+
+      const lines = results.map(r =>
+        r.ok
+          ? ['✓ ' + (r.task.tag !== '其他' ? '#' + r.task.tag + ' ' : '') + r.task.name,
+             r.task.date + ' ' + r.task.start + '–' + r.task.end]
+          : ['✗ ' + r.task.name, '失败：' + r.error]
+      );
+      addResultCard(lines, [
+        { label: '查看今日', cls: '', fn: 'UI.goPage("today",document.querySelectorAll(".nav-item")[0])' },
+        { label: '查看日历', cls: '', fn: 'UI.goPage("cal",document.querySelectorAll(".nav-item")[2])' },
+      ]);
+
+      if (failCount > 0) addAIBubble('已创建 ' + okCount + ' 个，' + failCount + ' 个失败。');
+      await Cal.loadTodayEvents();
+      CalView.refresh();
+    } catch(e) {
+      t.remove();
+      addAIBubble('批量创建失败：' + e.message);
+    }
+  }
+
   /* ══ Undo actions ══ */
   async function undoCreate() {
     if (!lastCreated?.gcalId) return;
@@ -443,7 +602,6 @@ ${todayList}${lastCtx}
   }
 
   async function undoDelete() {
-    // Re-create the deleted event from snapshot
     if (!lastUndo?.match) return;
     const snap = lastUndo.match;
     const t    = UI.toast('撤销中...', 'loading', 0);
@@ -521,5 +679,6 @@ ${todayList}${lastCtx}
   return {
     initChat, sendMessage, analyzeToday, setKey, loadKey,
     undoCreate, undoDelete, undoUpdate,
+    _pendingPlan,
   };
 })();
