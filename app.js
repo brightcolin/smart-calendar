@@ -246,11 +246,62 @@ function eventCard(e) {
     + (e.description ? '<div class="event-desc">' + esc(e.description.slice(0, 80)) + '</div>' : '')
     + (diff != null ? '<div class="event-actual ' + (diff > 0 ? 'over' : '') + '">实际 ' + fmtMins(e.actualMins) + ' · ' + (diff > 0 ? '超出 ' : '节省 ') + fmtMins(Math.abs(diff)) + '</div>' : '')
     + '</div>'
+    + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
     + '<span class="badge badge-' + esc(e.tag) + '" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="openTagEditor(\'' + esc(e.gcalId) + '\')">'
     + '<span style="width:7px;height:7px;border-radius:50%;background:' + color + ';display:inline-block;flex-shrink:0"></span>'
     + esc(e.tag) + '</span>'
+    // Complete button: hide for 课程 tag and already done events
+    + (e.tag !== '课程' && !e.done ? '<button class="btn-complete" onclick="event.stopPropagation();openCompleteModal(\'' + esc(e.gcalId) + '\')" title="标记完成">✓</button>' : '')
+    + '</div>'
     + '</div>'
     + '</div></div>';
+}
+
+/* ══ Complete modal with actual duration ══ */
+function openCompleteModal(gcalId) {
+  const ev = (App.todayEvents || []).find(e => e.gcalId === gcalId);
+  if (!ev) return;
+  const elapsed = Math.round(Math.max(0, (new Date() - new Date(ev.start)) / 60000));
+  const suggested = Math.min(elapsed, ev.estMins * 2 || 180); // cap at 2x estimate
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.id = 'completeModal';
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = '<div class="modal" onclick="event.stopPropagation()" style="max-width:360px">'
+    + '<div class="modal-title">完成「' + esc(ev.name) + '」</div>'
+    + '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">预估 ' + fmtMins(ev.estMins) + '，已过 ' + fmtMins(elapsed) + '</div>'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'
+    + '<span style="font-size:13px;color:var(--text2);flex-shrink:0">实际时长</span>'
+    + '<input type="number" id="actualMinsInput" class="form-input" style="width:80px;text-align:center" value="' + suggested + '" min="1" max="600">'
+    + '<span style="font-size:13px;color:var(--text3)">分钟</span>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button class="btn" style="flex:1" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>'
+    + '<button class="btn btn-primary" style="flex:2" onclick="confirmComplete(\'' + esc(gcalId) + '\')">完成 ✓</button>'
+    + '</div></div>';
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('actualMinsInput')?.select(), 100);
+}
+
+async function confirmComplete(gcalId) {
+  const modal = document.getElementById('completeModal');
+  const minsInput = document.getElementById('actualMinsInput');
+  const actualMins = Math.max(1, parseInt(minsInput?.value) || 0);
+  if (modal) modal.remove();
+  const ev = (App.todayEvents || []).find(e => e.gcalId === gcalId);
+  if (!ev) return;
+  const t = UI.toast('标记完成中...', 'loading', 0);
+  try {
+    await Cal.markComplete(ev, actualMins);
+    const local = App.store.tasks.find(x => x.gcalId === gcalId);
+    if (local) { local.done = true; local.actualMins = actualMins; App.saveState(); }
+    t.remove();
+    UI.toast('✓「' + ev.name + '」已完成（' + fmtMins(actualMins) + '）', 'success');
+    await Cal.loadTodayEvents();
+  } catch(e) {
+    t.remove();
+    UI.toast('操作失败：' + e.message, 'error');
+  }
 }
 
 /* ══ Tag / color editor ══ */
