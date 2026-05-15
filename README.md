@@ -1,6 +1,6 @@
 # 智能日历助手 · Smart Calendar Assistant
 
-用自然语言管理 Google Calendar，支持添加到 iPhone 主屏幕。纯前端，无后端服务器，数据直接存储在你的 Google Calendar。
+用自然语言管理 Google Calendar 的私人秘书。内置课程表感知、智能排期、批量规划、番茄钟、统计仪表盘。纯前端，无后端服务器，数据直接存储在你的 Google Calendar。
 
 > ⚠️ 当前为测试阶段，暂不对外开放登录。如需体验请联系作者添加测试账号。
 
@@ -23,16 +23,34 @@
 
 ## 功能
 
+### 秘书大脑
+
+系统内置一套「秘书守则」，AI 不只是翻译你的指令，还会根据你的课程表、作息节奏、任务优先级做出智能判断：
+
+- **课程表感知**：知道你周几几点有什么课，自动避开课程时段
+- **时段匹配**：高强度学习排在 19:00–21:00，轻度任务排在 22:00 后
+- **保护时段**：午休 12:15–13:30、运动窗口 17:00–18:00 不安排学习任务
+- **优先级排序**：考试季自动优先安排课程复习，按微积分 > 物理 > 高代排序
+- **六条主线追踪**：学习、科研、RoboMaster、自媒体、竞赛、运动，每条线有周目标时长
+
 ### 自然语言对话
 
-打开 App 默认进入对话界面。直接输入描述，系统自动解析并同步到 Google Calendar，操作完成后结果内联显示在对话里，无需切换页面。
+打开 App 默认进入对话界面。直接输入描述，系统自动解析并同步到 Google Calendar。
 
-**创建**
+**创建（智能排期）**
 ```
 「#工作 明天14:00开会一小时，提前15分钟提醒」
+「安排物理复习」                    ← 自动选最优空闲时段
 「下周五晚上看电影两小时」
-「后天下午写报告，大概3小时左右」
 ```
+
+**批量规划**
+```
+「帮我规划明天」                    ← AI 生成整天方案，确认后批量创建
+「这周还要做微积分作业、读论文、项目推广，帮我排一下」
+```
+
+规划方案会展示排期思路（为什么这样排），你回复「确认」创建，或「调整」重新排。
 
 **修改**
 ```
@@ -54,7 +72,14 @@
 「本周安排」
 ```
 
-操作执行后无需确认弹窗，直接生效，结果卡片提供「撤销」按钮应对误操作。修改时在 ±7 天范围内自动搜索目标活动，无需先加载当日列表。
+操作执行后直接生效，结果卡片提供「撤销」按钮应对误操作。修改时在 ±7 天范围内自动搜索目标活动。
+
+### 任务完成
+
+- **一键完成按钮**：今日页面每个任务卡片右侧有 ✓ 按钮，点击弹出实际时长确认弹窗
+- **实际时长可调**：预填已过时间，可手动修改后确认，精准记录实际耗时
+- **课程自动完成**：课程类事件到了结束时间后自动标记完成，无需手动操作
+- **课程不显示完成按钮**：课程事件不会出现 ✓ 按钮，避免误操作
 
 ### 标签与颜色
 
@@ -92,6 +117,7 @@
 
 底部「◎ 统计」，支持日/周切换：
 
+- **主线进度仪表盘**：学习+课程、科研、工作、运动等各主线的本周实际投入 vs 目标时长进度条，一眼看出哪条线落后
 - 按日历分布、按标签分布
 - 相同活动合并统计（总耗时 + 平均耗时）
 - 预估 vs 实际双进度条对比
@@ -102,6 +128,7 @@
 - 多账号管理，Token 和 API Key 本地 AES-GCM 加密
 - Token 每50分钟自动静默刷新，无需重新登录
 - 多日历切换
+- 时区感知，正确处理 UTC+N 时区的日期显示
 
 ---
 
@@ -110,12 +137,12 @@
 ```
 ├── index.html      # 页面结构与所有弹窗
 ├── style.css       # 完整样式（深色主题）
-├── app.js          # 主逻辑与 UI           ← 修改 Client ID 在第一行
+├── app.js          # 主逻辑、UI、完成按钮      ← 修改 Client ID 在第一行
 ├── auth.js         # 多账号管理与加密存储
-├── calendar.js     # Google Calendar API 封装
-├── ai.js           # 自然语言解析与执行
-├── calview.js      # 可视化日历视图
-├── stats.js        # 统计图表与 AI 周报
+├── calendar.js     # Google Calendar API 封装 + 课程自动完成
+├── ai.js           # 秘书大脑：自然语言解析、智能排期、批量规划
+├── calview.js      # 可视化日历视图（周/日）
+├── stats.js        # 统计图表、主线仪表盘、AI 周报
 └── pomodoro.js     # 番茄钟
 ```
 
@@ -126,7 +153,7 @@
 ### 前置条件
 
 - Google 账号
-- GitHub 账号
+- GitHub 账号（推荐申请 [GitHub Student Pack](https://education.github.com/pack) 以使用 Private Pages）
 - DeepSeek API Key（[申请](https://platform.deepseek.com/api_keys)，按量计费，个人使用费用极低）
 
 ### 第一步：创建 Google Cloud 项目
@@ -173,7 +200,7 @@ const GOOGLE_CLIENT_ID = '你的客户端ID.apps.googleusercontent.com';
 
 ### 第六步：部署到 GitHub Pages
 
-1. 新建 GitHub 仓库（Public），上传全部 9 个文件
+1. 新建 GitHub 仓库（Public 或 Private + GitHub Pro），上传全部 9 个文件
 2. Settings → Pages → Branch: main → Save
 3. 约 1 分钟后访问 `https://你的用户名.github.io/仓库名`
 
@@ -189,6 +216,18 @@ Safari 打开网址 → 底部分享按钮 → 添加到主屏幕。
 
 ---
 
+## 自定义秘书守则
+
+`ai.js` 中的 `buildSystemPrompt()` 函数包含完整的秘书守则。你可以根据自己的情况修改：
+
+- **课程表**：更新「课程表」部分的时间和科目
+- **作息框架**：调整起床时间、午休区、运动窗口
+- **优先级**：修改考试季/非考试季的任务排序
+- **主线目标**：在 `stats.js` 的 `MAIN_LINES` 数组中修改每周目标时长
+- **标签体系**：在 `calendar.js` 的 `TAG_COLOR` 和 `TAG_HEX` 中增减标签
+
+---
+
 ## 安全说明
 
 所有敏感数据仅存在本地，不经过任何第三方服务器：
@@ -201,6 +240,8 @@ Safari 打开网址 → 底部分享按钮 → 添加到主屏幕。
 | 日历事件 | Google Calendar | Google 负责 |
 
 加密密钥由设备指纹通过 PBKDF2（100,000 次迭代）派生，密钥本身不存储。所有网络请求只发往 Google 和 DeepSeek。
+
+**关于源代码公开**：即使仓库是 Public，安全风险也很低。Google Client ID 不是密钥，它的安全靠 OAuth 同意屏幕的「已授权 JavaScript 来源」限制。DeepSeek API Key 加密存储在用户浏览器中，不在代码里。如需私有化，推荐使用 GitHub Student Pack（Private Pages）或 Cloudflare Pages。
 
 撤销授权：[myaccount.google.com/permissions](https://myaccount.google.com/permissions) → 找到本应用 → 撤销。
 
@@ -218,7 +259,24 @@ Safari 打开网址 → 底部分享按钮 → 添加到主屏幕。
 系统在目标日期 ±7 天内搜索。描述时加上大概日期（如「上周五的那个开会」）可以帮助定位。
 
 **DeepSeek API 费用大概多少**
-个人日常使用通常每月不超过 1 元。每次对话约消耗 500–1000 个 token，按实际用量计费。
+个人日常使用通常每月不超过 1 元。每次对话约消耗 500–1500 个 token（批量规划消耗更多），按实际用量计费。
+
+**课程到时间没有自动完成**
+课程自动完成在每次加载今日事件时触发。打开 App 或点击「刷新」即可触发。
+
+**如何调整主线目标时长**
+编辑 `stats.js` 中的 `MAIN_LINES` 数组，`target` 单位为分钟/周。
+
+---
+
+## 配合 Claude 使用
+
+本 App 可以和 Claude（claude.ai）配合使用，实现更强的规划能力：
+
+- **App 负责日常快操作**：随手加事件、看安排、开番茄钟、查统计
+- **Claude 负责规划层**：每周帮你排下周计划、在多条主线之间分配时间、检测冲突
+- 两者共享同一个 Google Calendar，天然协作
+- 在 Claude 项目中粘贴秘书守则，即可获得跨对话的一致规划体验
 
 ---
 
@@ -234,199 +292,85 @@ Safari 打开网址 → 底部分享按钮 → 添加到主屏幕。
 
 **[↑ Back to top](#智能日历助手--smart-calendar-assistant)**
 
-- [Features](#features)
-- [File structure](#file-structure)
-- [Setup](#setup)
-- [Security](#security)
-- [FAQ](#faq)
-
----
-
-A natural-language-driven Google Calendar manager that installs as a PWA on iPhone. No backend required — data flows directly between your device and Google.
+A natural-language-driven Google Calendar manager with a built-in "secretary brain." Understands your class schedule, respects your routines, and plans tasks intelligently. Installs as a PWA on iPhone. No backend — data flows directly between your device and Google.
 
 > ⚠️ Currently in private testing. Contact the author to be added as a test user.
 
 ---
 
-## Features
+### Key features
 
-### Conversational interface
+**Secretary brain** — The AI knows your class schedule, sleep rhythm, exercise window, lunch break, and task priorities. When you say "schedule physics review" without a time, it picks the best available slot automatically.
 
-The app opens directly to a chat screen. Type what you want in plain Chinese and it happens — no confirm dialogs, just an inline result card with an undo button if you make a mistake.
+**Batch planning** — Say "plan my tomorrow" and the AI generates a full-day schedule with reasoning, which you can confirm or adjust before creating.
 
-**Create**
-```
-"#work Team meeting tomorrow 14:00 for one hour, remind 15 min before"
-"Movie night next Friday evening, two hours"
-"Write report the day after tomorrow afternoon, about 3 hours"
-```
+**One-tap complete** — Each task card has a ✓ button (hidden for classes). Tap it to confirm actual duration and mark done. Classes auto-complete when their time passes.
 
-**Modify**
-```
-"Push today's meeting to 16:00"
-"Change the meeting tag to #study"
-"Add a note to the last event: bring laptop"
-```
+**Main line dashboard** — Stats page shows weekly progress bars for each "main line" (study, research, work, exercise) against target hours.
 
-**Complete / Delete**
-```
-"Mark the weekly report as done"
-"Delete today's meeting"
-```
+**Conversational CRUD** — Create, modify, query, complete, and delete events in natural language. Undo button on every action. Modification auto-searches ±7 days.
 
-**Query**
-```
-"What's on today?"
-"How many events do I have tomorrow?"
-"Show me this week's schedule"
-```
+**Tags & colors** — Prefix events with `#tag`. Colors sync to Google Calendar. Tap to change.
 
-When modifying events, the system searches ±7 days around the target date automatically — no need to load the day first.
+**Calendar view** — Week and day views with color-coded blocks, current-time line, and tap-to-create on empty slots.
 
-### Tags & colors
+**Pomodoro timer** — Customizable durations, linkable to tasks, auto-logs focus time.
 
-Prefix events with `#tag` (e.g. `#work Team meeting`). Colors sync automatically to Google Calendar. Tap any tag badge or the left color bar to change it instantly.
+**Statistics** — Tag breakdown, merged activity stats, estimated vs actual comparison, AI weekly report.
 
-| Tag | Color | Tag | Color |
-|-----|-------|-----|-------|
-| `#学习` (study) | Blue | `#运动` (exercise) | Orange |
-| `#课程` (class) | Purple | `#娱乐` (leisure) | Pink |
-| `#科研` (research) | Teal | `#工作` (work) | Red |
-| `#社工` (social) | Green | `#其他` (other) | Grey |
-
-### Calendar view
-
-Tap **▦ Calendar** for week and day views with color-coded event blocks. Tap an empty slot to jump to chat with the time pre-filled. Tap an event to view details and jump to chat for natural-language operations.
-
-### Pomodoro timer
-
-Tap 🍅 on the Today page. Customisable focus / break durations, linkable to today's tasks, with audio alerts and system notifications. Settings are saved between sessions.
-
-### Statistics
-
-Tap **◎ Stats** to switch between daily and weekly views: tag breakdown, merged stats for repeated activities, estimated vs actual dual-bar comparison, and AI weekly report in plain text via DeepSeek.
-
-### Other
-
-- Multi-account support; Token and API Key encrypted locally with AES-GCM
-- Token silently refreshes every 50 minutes — no login interruptions
-- Multi-calendar switching
+**Security** — AES-GCM encrypted tokens and keys. PBKDF2-derived device key. All traffic goes only to Google and DeepSeek.
 
 ---
 
-## File structure
+### File structure
 
 ```
-├── index.html      # Page structure and all modals
+├── index.html      # Page structure and modals
 ├── style.css       # Full styles (dark theme)
-├── app.js          # Main logic and UI     ← put your Client ID on line 1
-├── auth.js         # Multi-account and encrypted storage
-├── calendar.js     # Google Calendar API wrapper
-├── ai.js           # Natural language parsing and execution
-├── calview.js      # Visual calendar view (week / day)
-├── stats.js        # Statistics and AI weekly report
+├── app.js          # Main logic, UI, complete button    ← Client ID on line 1
+├── auth.js         # Multi-account + encrypted storage
+├── calendar.js     # Google Calendar API + course auto-complete
+├── ai.js           # Secretary brain: NL parsing, smart scheduling, batch planning
+├── calview.js      # Visual calendar (week / day)
+├── stats.js        # Stats, main line dashboard, AI weekly report
 └── pomodoro.js     # Pomodoro timer
 ```
 
 ---
 
-## Setup
+### Setup
 
-### Prerequisites
+1. Create a Google Cloud project and enable Calendar API
+2. Configure OAuth consent screen with calendar + userinfo scopes
+3. Create OAuth Web credentials with your GitHub Pages domain
+4. Put the Client ID in `app.js` line 1
+5. Deploy to GitHub Pages (or Cloudflare Pages / Vercel for private repos)
+6. Add to iPhone Home Screen via Safari Share
+7. Sign in and enter DeepSeek API Key in Settings
 
-- A Google account
-- A GitHub account
-- A DeepSeek API Key ([apply here](https://platform.deepseek.com/api_keys), pay-per-token)
-
-### Step 1 — Create a Google Cloud project
-
-Open [console.cloud.google.com](https://console.cloud.google.com) and create a new project.
-
-### Step 2 — Enable Google Calendar API
-
-APIs & Services → Library → search `Google Calendar API` → Enable.
-
-### Step 3 — Configure the OAuth consent screen
-
-APIs & Services → OAuth consent screen → External → Create. Add these three scopes:
-
-```
-https://www.googleapis.com/auth/calendar
-https://www.googleapis.com/auth/userinfo.profile
-https://www.googleapis.com/auth/userinfo.email
-```
-
-Add your Gmail as a test user.
-
-### Step 4 — Create OAuth credentials
-
-Credentials → Create credentials → OAuth client ID → Web application.
-
-Under **Authorised JavaScript origins** add:
-
-```
-https://your-username.github.io
-```
-
-Copy the **Client ID**.
-
-### Step 5 — Add the Client ID
-
-Edit the first line of `app.js`:
-
-```javascript
-const GOOGLE_CLIENT_ID = 'your-client-id.apps.googleusercontent.com';
-```
-
-### Step 6 — Deploy to GitHub Pages
-
-1. Create a public GitHub repository and upload all 9 files
-2. Settings → Pages → Branch: main → Save
-3. Visit `https://your-username.github.io/repo-name` after ~1 minute
-
-> ⚠️ Must be opened via `https://`. Opening the HTML file locally fails with Error 400.
-
-### Step 7 — Install on iPhone
-
-Safari → Share → Add to Home Screen.
-
-### Step 8 — First-time setup
-
-Sign in, then go to ⚙ Settings and enter your DeepSeek API Key. It's encrypted on-device and remembered.
+See the [Chinese setup guide](#自行部署) for detailed steps.
 
 ---
 
-## Security
+### Customization
+
+Edit `buildSystemPrompt()` in `ai.js` to change class schedules, routines, and priorities. Edit `MAIN_LINES` in `stats.js` to adjust weekly hour targets per category.
+
+---
+
+### Security
 
 | Data | Location | Encryption |
 |------|----------|------------|
 | Google Access Token | localStorage | AES-GCM 256-bit |
 | DeepSeek API Key | localStorage | AES-GCM 256-bit |
-| Task records, preferences | localStorage | None (non-sensitive) |
+| Task records | localStorage | None (non-sensitive) |
 | Calendar events | Google Calendar | Managed by Google |
-
-Encryption keys are PBKDF2-derived (100,000 iterations) from a device fingerprint. The key itself is never stored. All network requests go only to Google and DeepSeek.
 
 Revoke access: [myaccount.google.com/permissions](https://myaccount.google.com/permissions)
 
 ---
 
-## FAQ
-
-**Error 400 / Error 401 invalid_client**
-The Client ID on line 1 of `app.js` is wrong, or the GitHub Pages domain is missing from Authorised JavaScript origins in Google Cloud Console. Changes can take up to 5 minutes to propagate.
-
-**No events after signing in**
-Tap Refresh in the Today page, or check the calendar picker at the top.
-
-**Can't find an event to modify**
-The system searches ±7 days. Adding an approximate date ("last Friday's meeting") helps narrow it down.
-
-**How much does DeepSeek cost?**
-Typically less than ¥1/month for personal use. Roughly 500–1000 tokens per conversation.
-
----
-
-## License
+### License
 
 [MIT License](LICENSE)
