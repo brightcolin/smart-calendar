@@ -359,6 +359,23 @@ select.form-input option { background: var(--bg3); }
 .result-val { color:var(--text); text-align:right; }
 .result-actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
 
+/* ══ Complete button ══ */
+.btn-complete { width:28px; height:28px; border-radius:50%; border:1.5px solid var(--green); background:transparent; color:var(--green); font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; line-height:1; }
+.btn-complete:hover { background:rgba(93,186,138,0.15); }
+.btn-complete:active { background:var(--green); color:#1a1208; transform:scale(0.9); }
+
+/* ══ Main line dashboard ══ */
+.mainline-row { margin-bottom:12px; }
+.mainline-row:last-child { margin-bottom:0; }
+.mainline-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.mainline-label { font-size:12px; font-weight:500; }
+.mainline-nums { font-size:11px; color:var(--text2); font-family:'DM Mono',monospace; }
+.mainline-bar-track { height:8px; background:var(--bg4); border-radius:4px; overflow:hidden; position:relative; }
+.mainline-bar-fill { height:100%; border-radius:4px; transition:width 0.6s ease; }
+.mainline-target-line { position:absolute; right:0; top:0; bottom:0; width:1.5px; background:var(--text3); }
+.mainline-status { font-size:10px; margin-top:2px; font-family:'DM Mono',monospace; }
+.mainline-other { font-size:11px; color:var(--text3); margin-top:8px; font-family:'DM Mono',monospace; }
+
 /* ══ Query result items ══ */
 .query-item { display:flex; align-items:center; gap:7px; padding:4px 0; border-bottom:0.5px solid var(--border); font-size:13px; }
 .query-item:last-child { border-bottom:none; }

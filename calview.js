@@ -11,6 +11,11 @@ const CalView = (() => {
   let cachedEvents = [];
 
   const HOURS     = Array.from({ length: 24 }, (_, i) => i);  // 0..23
+
+  /* Local date string (avoids toISOString UTC shift in UTC+N timezones) */
+  function localDateStr(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
   const HOUR_H    = 56;   // px per hour slot
   const TAG_TEXT  = {     // readable text color on colored bg
     '学习':'#1a3050','课程':'#2a1a50','科研':'#0a2020','社工':'#0a2010',
@@ -92,7 +97,7 @@ const CalView = (() => {
     html += '<div class="cv-header-row">';
     html += '<div></div>';  // time col spacer
     days.forEach((d, i) => {
-      const isToday = d.toISOString().slice(0,10) === today;
+      const isToday = localDateStr(d) === today;
       html += '<div class="cv-day-head' + (isToday ? ' today' : '') + '">'
         + '<span class="cv-day-num">' + d.getDate() + '</span>'
         + '周' + weekDays[i]
@@ -105,7 +110,7 @@ const CalView = (() => {
     if (allDay.length) {
       html += '<div class="cv-allday-row"><div></div>';
       days.forEach(d => {
-        const ds  = d.toISOString().slice(0,10);
+        const ds  = localDateStr(d);
         const dayAllDay = allDay.filter(e => e.start?.slice(0,10) === ds);
         html += '<div class="cv-allday-cell">';
         dayAllDay.forEach(e => {
@@ -126,7 +131,7 @@ const CalView = (() => {
       html += '<div class="cv-row">';
       html += '<div class="cv-time-label">' + (h === 0 ? '' : h.toString().padStart(2,'0') + ':00') + '</div>';
       days.forEach(d => {
-        const ds      = d.toISOString().slice(0,10);
+        const ds      = localDateStr(d);
         const isToday = ds === today;
         html += '<div class="cv-cell' + (isToday ? ' today-col' : '') + '"'
           + ' onclick="CalView.quickCreate(\'' + ds + '\',' + h + ')">'
@@ -163,8 +168,8 @@ const CalView = (() => {
       if (!e.start?.includes('T')) return;
       const startDate = new Date(e.start);
       const endDate   = new Date(e.end   || e.start);
-      const ds        = startDate.toISOString().slice(0,10);
-      const colIdx    = days.findIndex(d => d.toISOString().slice(0,10) === ds);
+      const ds        = localDateStr(startDate);
+      const colIdx    = days.findIndex(d => localDateStr(d) === ds);
       if (colIdx < 0) return;
 
       const startMin  = startDate.getHours() * 60 + startDate.getMinutes();
@@ -190,8 +195,8 @@ const CalView = (() => {
     });
 
     // Current time line
-    const ds = new Date().toISOString().slice(0,10);
-    const ci = days.findIndex(d => d.toISOString().slice(0,10) === ds);
+    const ds = localDateStr(new Date());
+    const ci = days.findIndex(d => localDateStr(d) === ds);
     if (ci >= 0) {
       const now    = new Date();
       const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -208,7 +213,7 @@ const CalView = (() => {
   /* ══ Day view ══ */
   async function renderDay(wrap) {
     const d     = new Date(anchor);
-    const ds    = d.toISOString().slice(0,10);
+    const ds    = localDateStr(d);
     const today = Cal.todayStr();
     updateTitle(d, null);
 
