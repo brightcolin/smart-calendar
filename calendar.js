@@ -100,20 +100,6 @@ const Cal = (() => {
       });
       const data = await req('GET', '/calendars/' + encodeURIComponent(activeCalendarId) + '/events?' + params);
       const events = (data.items || []).map(normalizeEvent);
-
-      // Auto-complete courses that have ended
-      const now = new Date();
-      for (const e of events) {
-        if (e.tag === '课程' && !e.done && e.end && new Date(e.end) < now) {
-          try {
-            const courseMins = Math.round((new Date(e.end) - new Date(e.start)) / 60000);
-            await markComplete(e, courseMins, new Date(e.end));
-            e.done = true;
-            e.actualMins = courseMins;
-          } catch(err) { /* silent — don't block UI for auto-complete failures */ }
-        }
-      }
-
       t.remove();
       UI.renderTodayEvents(events);
       // Refresh pomodoro task selector if open
@@ -358,10 +344,7 @@ const Cal = (() => {
     return Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
   }
 
-  function todayStr() {
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  }
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
 
   return {
     loadCalendars, getCalendars, setActiveCalendar,

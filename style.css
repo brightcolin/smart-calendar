@@ -359,26 +359,93 @@ select.form-input option { background: var(--bg3); }
 .result-val { color:var(--text); text-align:right; }
 .result-actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
 
-/* ══ Complete button ══ */
-.btn-complete { width:28px; height:28px; border-radius:50%; border:1.5px solid var(--green); background:transparent; color:var(--green); font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; line-height:1; }
-.btn-complete:hover { background:rgba(93,186,138,0.15); }
-.btn-complete:active { background:var(--green); color:#1a1208; transform:scale(0.9); }
-
-/* ══ Main line dashboard ══ */
-.mainline-row { margin-bottom:12px; }
-.mainline-row:last-child { margin-bottom:0; }
-.mainline-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
-.mainline-label { font-size:12px; font-weight:500; }
-.mainline-nums { font-size:11px; color:var(--text2); font-family:'DM Mono',monospace; }
-.mainline-bar-track { height:8px; background:var(--bg4); border-radius:4px; overflow:hidden; position:relative; }
-.mainline-bar-fill { height:100%; border-radius:4px; transition:width 0.6s ease; }
-.mainline-target-line { position:absolute; right:0; top:0; bottom:0; width:1.5px; background:var(--text3); }
-.mainline-status { font-size:10px; margin-top:2px; font-family:'DM Mono',monospace; }
-.mainline-other { font-size:11px; color:var(--text3); margin-top:8px; font-family:'DM Mono',monospace; }
-
 /* ══ Query result items ══ */
 .query-item { display:flex; align-items:center; gap:7px; padding:4px 0; border-bottom:0.5px solid var(--border); font-size:13px; }
 .query-item:last-child { border-bottom:none; }
 .query-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .query-time { font-family:'DM Mono',monospace; font-size:11px; color:var(--text2); width:38px; flex-shrink:0; }
 .query-name { flex:1; min-width:0; }
+
+/* ══════════════════════════════════════════════════════
+   Review Planner Styles
+══════════════════════════════════════════════════════ */
+
+/* ── Empty state ── */
+.rv-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:50vh; text-align:center; padding:32px 20px; }
+.rv-empty-icon { font-size:48px; margin-bottom:14px; }
+.rv-empty-title { font-size:18px; font-weight:600; margin-bottom:8px; }
+.rv-empty-sub { font-size:13px; color:var(--text2); line-height:1.7; margin-bottom:20px; }
+.rv-gen-btn { padding:12px 28px !important; font-size:15px !important; }
+
+/* ── Dashboard ── */
+.rv-dash { margin-bottom:14px; }
+.rv-dash-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
+.rv-dash-card { background:var(--bg3); border-radius:var(--radius-sm); padding:12px 10px; text-align:center; border:0.5px solid var(--border); }
+.rv-dash-num { font-size:22px; font-weight:600; font-family:'DM Mono',monospace; color:var(--accent); }
+.rv-dash-unit { font-size:13px; font-weight:400; }
+.rv-dash-label { font-size:11px; color:var(--text3); margin-top:2px; }
+
+/* ── Subject progress bars ── */
+.rv-subj-bars { background:var(--bg2); border-radius:var(--radius-sm); padding:12px; border:0.5px solid var(--border); }
+.rv-bar-row { display:flex; align-items:center; gap:8px; padding:5px 0; }
+.rv-bar-label { font-size:12px; color:var(--text2); width:36px; flex-shrink:0; display:flex; align-items:center; gap:4px; }
+.rv-bar-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.rv-bar-track { flex:1; height:8px; background:var(--bg4); border-radius:4px; overflow:hidden; }
+.rv-bar-fill { height:100%; border-radius:4px; transition:width 0.4s ease; }
+.rv-bar-val { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; width:68px; text-align:right; flex-shrink:0; }
+
+/* ── Filters ── */
+.rv-filters { display:flex; gap:6px; margin-bottom:10px; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch; }
+.rv-filters::-webkit-scrollbar { display:none; }
+.rv-filter-btn { flex-shrink:0; padding:5px 12px; border-radius:20px; font-size:12px; border:0.5px solid var(--border); background:var(--bg2); color:var(--text2); cursor:pointer; font-family:'Noto Serif SC',serif; transition:all 0.15s; white-space:nowrap; }
+.rv-filter-btn.active { background:var(--bg4); color:var(--text); border-color:var(--border2); }
+.rv-filter-btn:hover { border-color:var(--border2); }
+
+/* ── AI Bar ── */
+.rv-ai-bar { margin-bottom:12px; }
+.rv-ai-status { padding:10px 14px; border-radius:var(--radius-sm); background:rgba(200,169,110,0.1); border:0.5px solid rgba(200,169,110,0.25); color:var(--accent); font-size:13px; display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.rv-ai-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.rv-ai-btn { background:rgba(200,169,110,0.12) !important; border-color:rgba(200,169,110,0.3) !important; color:var(--accent) !important; }
+
+/* ── Timeline ── */
+.rv-timeline { }
+.rv-day { margin-bottom:16px; border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); background:var(--bg2); }
+.rv-day.today { border-color:var(--accent); box-shadow:0 0 0 0.5px rgba(200,169,110,0.3); }
+.rv-day.past { opacity:0.7; }
+.rv-day-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--bg3); border-bottom:0.5px solid var(--border); }
+.rv-day-date { display:flex; align-items:center; gap:8px; }
+.rv-day-md { font-size:15px; font-weight:500; font-family:'DM Mono',monospace; }
+.rv-day-wd { font-size:12px; color:var(--text2); }
+.rv-day-today-badge { font-size:10px; background:var(--accent); color:var(--bg); padding:1px 7px; border-radius:10px; font-weight:500; }
+.rv-day-status { font-size:11px; }
+.rv-status-done { color:var(--green); }
+.rv-status-overdue { color:var(--red); }
+
+/* ── Task Card ── */
+.rv-task { display:flex; align-items:stretch; padding:0; border-bottom:0.5px solid var(--border); transition:background 0.15s; }
+.rv-task:last-child { border-bottom:none; }
+.rv-task:hover { background:rgba(255,255,255,0.02); }
+.rv-task.done { opacity:0.55; }
+.rv-task.overdue .rv-task-name { color:var(--red); }
+.rv-task-color { width:4px; flex-shrink:0; }
+.rv-task-body { flex:1; min-width:0; padding:10px 12px; }
+.rv-task-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.rv-task-name { font-size:14px; line-height:1.4; flex:1; min-width:0; }
+.rv-task.done .rv-task-name { text-decoration:line-through; }
+.rv-task-check { width:22px; height:22px; border-radius:50%; border:1.5px solid var(--border2); background:none; color:transparent; cursor:pointer; flex-shrink:0; font-size:12px; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+.rv-task-check.checked { background:var(--green); border-color:var(--green); color:#fff; }
+.rv-task-check:hover { border-color:var(--green); }
+.rv-task-meta { display:flex; gap:10px; align-items:center; margin-top:4px; font-size:11px; }
+.rv-task-time { font-family:'DM Mono',monospace; color:var(--text2); }
+.rv-task-dur { color:var(--text3); }
+.rv-task-subj { font-weight:500; }
+.rv-task-desc { font-size:12px; color:var(--text3); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rv-task-actions { display:flex; flex-direction:column; justify-content:center; gap:4px; padding:6px 8px; }
+.rv-task-act { width:26px; height:26px; border-radius:50%; border:none; background:var(--bg3); color:var(--text3); cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+.rv-task-act:hover { background:var(--bg4); color:var(--text); }
+.rv-task-act.del:hover { color:var(--red); }
+
+/* ── Modal form rows ── */
+.rv-form-row { margin-bottom:10px; }
+.rv-form-row label { display:block; font-size:12px; color:var(--text2); margin-bottom:4px; }
+.rv-reschedule-input { resize:vertical; min-height:64px; }
