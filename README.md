@@ -76,10 +76,7 @@
 
 ### 任务完成
 
-- **一键完成按钮**：今日页面每个任务卡片右侧有 ✓ 按钮，点击弹出实际时长确认弹窗
-- **实际时长可调**：预填已过时间，可手动修改后确认，精准记录实际耗时
-- **课程自动完成**：课程类事件到了结束时间后自动标记完成，无需手动操作
-- **课程不显示完成按钮**：课程事件不会出现 ✓ 按钮，避免误操作
+通过对话告诉 AI「标记 XX 已完成」，AI 会自动计算实际耗时并同步到 Google Calendar。
 
 ### 标签与颜色
 
@@ -113,11 +110,20 @@
 - 阶段结束播放提示音并发送系统通知
 - 配置持久保存
 
+### 备考规划
+
+底部「📖 复习」，为考试季提供结构化 28 天复习计划管理：
+
+- **进度仪表盘**：倒计时天数、总体完成率、今日任务进度；各科目（微积分/物理/高代/英语/近代史/作业）独立进度条 vs 目标总学时
+- **时间轴视图**：按日期分组的任务卡片，支持按科目筛选；过期未完成任务标红提示
+- **AI 智能调整**：告知临时变动，DeepSeek 自动重新排列后续所有任务
+- **同步日历**：一键将复习任务批量创建到 Google Calendar（tag: `#学习`）
+- **手动管理**：添加、编辑、删除单条任务，逐条勾选完成
+
 ### 统计
 
-底部「◎ 统计」，支持日/周切换：
+底部「◎ 统计」，按周查看：
 
-- **主线进度仪表盘**：学习+课程、科研、工作、运动等各主线的本周实际投入 vs 目标时长进度条，一眼看出哪条线落后
 - 按日历分布、按标签分布
 - 相同活动合并统计（总耗时 + 平均耗时）
 - 预估 vs 实际双进度条对比
@@ -137,13 +143,14 @@
 ```
 ├── index.html      # 页面结构与所有弹窗
 ├── style.css       # 完整样式（深色主题）
-├── app.js          # 主逻辑、UI、完成按钮      ← 修改 Client ID 在第一行
+├── app.js          # 主逻辑、UI                ← 修改 Client ID 在第一行
 ├── auth.js         # 多账号管理与加密存储
-├── calendar.js     # Google Calendar API 封装 + 课程自动完成
+├── calendar.js     # Google Calendar API 封装
 ├── ai.js           # 秘书大脑：自然语言解析、智能排期、批量规划
 ├── calview.js      # 可视化日历视图（周/日）
-├── stats.js        # 统计图表、主线仪表盘、AI 周报
-└── pomodoro.js     # 番茄钟
+├── stats.js        # 统计图表、AI 周报
+├── pomodoro.js     # 番茄钟
+└── review.js       # 备考规划：28天计划、进度追踪、AI调整
 ```
 
 ---
@@ -223,8 +230,8 @@ Safari 打开网址 → 底部分享按钮 → 添加到主屏幕。
 - **课程表**：更新「课程表」部分的时间和科目
 - **作息框架**：调整起床时间、午休区、运动窗口
 - **优先级**：修改考试季/非考试季的任务排序
-- **主线目标**：在 `stats.js` 的 `MAIN_LINES` 数组中修改每周目标时长
 - **标签体系**：在 `calendar.js` 的 `TAG_COLOR` 和 `TAG_HEX` 中增减标签
+- **备考科目与计划**：在 `review.js` 的 `SUBJECTS` 数组和 `generateDefaultPlan()` 中修改科目、考试日期、目标学时和具体任务
 
 ---
 
@@ -260,12 +267,6 @@ Safari 打开网址 → 底部分享按钮 → 添加到主屏幕。
 
 **DeepSeek API 费用大概多少**
 个人日常使用通常每月不超过 1 元。每次对话约消耗 500–1500 个 token（批量规划消耗更多），按实际用量计费。
-
-**课程到时间没有自动完成**
-课程自动完成在每次加载今日事件时触发。打开 App 或点击「刷新」即可触发。
-
-**如何调整主线目标时长**
-编辑 `stats.js` 中的 `MAIN_LINES` 数组，`target` 单位为分钟/周。
 
 ---
 
@@ -304,9 +305,7 @@ A natural-language-driven Google Calendar manager with a built-in "secretary bra
 
 **Batch planning** — Say "plan my tomorrow" and the AI generates a full-day schedule with reasoning, which you can confirm or adjust before creating.
 
-**One-tap complete** — Each task card has a ✓ button (hidden for classes). Tap it to confirm actual duration and mark done. Classes auto-complete when their time passes.
-
-**Main line dashboard** — Stats page shows weekly progress bars for each "main line" (study, research, work, exercise) against target hours.
+**Exam review planner** — 28-day study plan with per-subject progress tracking (calculus, physics, linear algebra, English, history, homework). AI smart rescheduling, conflict detection, and one-click Google Calendar sync.
 
 **Conversational CRUD** — Create, modify, query, complete, and delete events in natural language. Undo button on every action. Modification auto-searches ±7 days.
 
@@ -327,13 +326,14 @@ A natural-language-driven Google Calendar manager with a built-in "secretary bra
 ```
 ├── index.html      # Page structure and modals
 ├── style.css       # Full styles (dark theme)
-├── app.js          # Main logic, UI, complete button    ← Client ID on line 1
+├── app.js          # Main logic, UI                    ← Client ID on line 1
 ├── auth.js         # Multi-account + encrypted storage
-├── calendar.js     # Google Calendar API + course auto-complete
+├── calendar.js     # Google Calendar API wrapper
 ├── ai.js           # Secretary brain: NL parsing, smart scheduling, batch planning
 ├── calview.js      # Visual calendar (week / day)
-├── stats.js        # Stats, main line dashboard, AI weekly report
-└── pomodoro.js     # Pomodoro timer
+├── stats.js        # Stats, AI weekly report
+├── pomodoro.js     # Pomodoro timer
+└── review.js       # Exam review planner: 28-day plan, progress tracking, AI rescheduling
 ```
 
 ---
@@ -354,7 +354,7 @@ See the [Chinese setup guide](#自行部署) for detailed steps.
 
 ### Customization
 
-Edit `buildSystemPrompt()` in `ai.js` to change class schedules, routines, and priorities. Edit `MAIN_LINES` in `stats.js` to adjust weekly hour targets per category.
+Edit `buildSystemPrompt()` in `ai.js` to change class schedules, routines, and priorities. Edit the `SUBJECTS` array and `generateDefaultPlan()` in `review.js` to customize exam subjects, dates, target hours, and the 28-day task schedule.
 
 ---
 

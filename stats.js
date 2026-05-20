@@ -4,14 +4,6 @@
 
 const Stats = (() => {
   let weekOffset = 0;
-  let statsMode  = 'week'; // 'week' | 'day'
-
-  function setMode(m, btn) {
-    statsMode = m;
-    document.querySelectorAll('.stats-mode-btn').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-    render();
-  }
 
   function shiftWeek(dir) {
     weekOffset += dir;
@@ -26,32 +18,13 @@ const Stats = (() => {
     const d   = new Date();
     const day = d.getDay() || 7;
     d.setDate(d.getDate() - day + 1 + offset * 7);
-    const fmt = dd => dd.getFullYear() + '-' + String(dd.getMonth()+1).padStart(2,'0') + '-' + String(dd.getDate()).padStart(2,'0');
-    const start = fmt(d);
+    const start = d.toISOString().slice(0, 10);
     d.setDate(d.getDate() + 6);
-    return { start, end: fmt(d) };
+    return { start, end: d.toISOString().slice(0, 10) };
   }
-
-  function getDayRange() {
-    const d = new Date();
-    d.setDate(d.getDate() + weekOffset);
-    const fmt = dd => dd.getFullYear() + '-' + String(dd.getMonth()+1).padStart(2,'0') + '-' + String(dd.getDate()).padStart(2,'0');
-    const ds = fmt(d);
-    return { start: ds, end: ds };
-  }
-
-  /* ── Main line weekly targets (minutes) ── */
-  const MAIN_LINES = [
-    { label: '学习+课程', tags: ['学习','课程'], target: 1800, color: '#6b9fe0' },
-    { label: '科研',      tags: ['科研'],         target: 420,  color: '#4dbdbd' },
-    { label: '工作/自媒体',tags: ['工作'],         target: 210,  color: '#e06b6b' },
-    { label: '运动',      tags: ['运动'],         target: 210,  color: '#e09b4d' },
-    { label: '社工',      tags: ['社工'],         target: 0,    color: '#5dba8a' },
-    { label: '娱乐',      tags: ['娱乐'],         target: 0,    color: '#e04d8a' },
-  ];
 
   async function render() {
-    const { start, end } = statsMode === 'day' ? getDayRange() : getWeekRange(weekOffset);
+    const { start, end } = getWeekRange(weekOffset);
     let events = [];
     try {
       events = await Cal.loadEventsRange(start, end);
@@ -73,7 +46,6 @@ const Stats = (() => {
     renderTagChart(done);
     renderGroupedChart(done);   // same-activity merge
     renderCompareChart(done);
-    renderMainLineDashboard(events);
   }
 
   /* ── By calendar ── */
@@ -196,50 +168,6 @@ const Stats = (() => {
     }).join('');
   }
 
-  /* ── Main line progress dashboard ── */
-  function renderMainLineDashboard(events) {
-    const el = document.getElementById('mainLineChart');
-    if (!el) return;
-
-    // Calculate actual minutes per main line
-    const allWithTime = events.filter(e => e.actualMins != null || e.estMins > 0);
-    const lines = MAIN_LINES.map(line => {
-      const matching = allWithTime.filter(e => line.tags.includes(e.tag));
-      const actual = matching.reduce((s, e) => s + (e.actualMins || e.estMins || 0), 0);
-      return { ...line, actual };
-    });
-
-    // Check if there are non-main-line events
-    const mainTags = MAIN_LINES.flatMap(l => l.tags);
-    const otherEvents = allWithTime.filter(e => !mainTags.includes(e.tag));
-    const otherMins = otherEvents.reduce((s, e) => s + (e.actualMins || e.estMins || 0), 0);
-
-    let html = lines.map(l => {
-      const pct = l.target > 0 ? Math.min(100, Math.round(l.actual / l.target * 100)) : (l.actual > 0 ? 100 : 0);
-      const status = l.target > 0
-        ? (pct >= 100 ? '✓ 达标' : (pct >= 60 ? '进行中' : '待加强'))
-        : '';
-      const statusCls = pct >= 100 ? 'color:var(--green)' : (pct >= 60 ? 'color:var(--accent)' : 'color:var(--red)');
-      return '<div class="mainline-row">'
-        + '<div class="mainline-header">'
-        + '<span class="mainline-label" style="color:' + l.color + '">' + l.label + '</span>'
-        + '<span class="mainline-nums">' + fmtMins(l.actual) + (l.target > 0 ? ' / ' + fmtMins(l.target) : '') + '</span>'
-        + '</div>'
-        + '<div class="mainline-bar-track">'
-        + '<div class="mainline-bar-fill" style="width:' + pct + '%;background:' + l.color + '"></div>'
-        + (l.target > 0 ? '<div class="mainline-target-line"></div>' : '')
-        + '</div>'
-        + (status ? '<div class="mainline-status" style="' + statusCls + '">' + status + ' · ' + pct + '%</div>' : '')
-        + '</div>';
-    }).join('');
-
-    if (otherMins > 0) {
-      html += '<div class="mainline-other">其他：' + fmtMins(otherMins) + '</div>';
-    }
-
-    el.innerHTML = html || '<div style="color:var(--text3);font-size:13px">暂无数据</div>';
-  }
-
   /* ══ Weekly AI report ══ */
   async function weekReport() {
     const box = document.getElementById('aiWeekBox');
@@ -305,5 +233,5 @@ const Stats = (() => {
 
   function fmtMins(m) { if (!m && m !== 0) return '—'; return m < 60 ? m + '分' : (m/60).toFixed(1) + 'h'; }
 
-  return { shiftWeek, setMode, render, weekReport };
+  return { shiftWeek, render, weekReport };
 })();
