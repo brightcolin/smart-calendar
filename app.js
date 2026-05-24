@@ -50,8 +50,7 @@ const App = {
     await Cal.loadTodayEvents();
     AI.initChat();
     UI.renderAccountLists();
-    Pomodoro.init();
-    Review.init();
+Review.init();
     // Default to chat page
     UI.goPage('add', document.querySelector('.nav-item'));
   },

@@ -68,7 +68,6 @@
       <div class="page-toolbar">
         <span class="page-date" id="todayLabel"></span>
         <div class="toolbar-actions">
-          <button class="btn btn-sm" id="pomodoroFloatBtn" onclick="Pomodoro.open()" title="番茄钟">🍅</button>
           <button class="btn btn-sm" onclick="Cal.loadTodayEvents()" id="refreshBtn">刷新</button>
         </div>
       </div>
@@ -230,75 +229,6 @@
   </div>
 </div>
 
-<!-- ══ Pomodoro Modal ══ -->
-<div class="modal-overlay" id="pomodoroModal" onclick="e=>{if(e.target===this)Pomodoro.close()}">
-  <div class="modal pomodoro-modal" onclick="event.stopPropagation()">
-    <div class="pomo-header">
-      <span class="modal-title" id="pomoTitle">专注</span>
-      <button class="pomo-close-btn" onclick="Pomodoro.close()">✕</button>
-    </div>
-
-    <!-- Task selector -->
-    <div class="pomo-task-row">
-      <select class="form-input pomo-task-select" id="pomoTaskSelect">
-        <option value="">不关联任务（自由专注）</option>
-      </select>
-    </div>
-
-    <!-- Timer display -->
-    <div class="pomo-ring-wrap">
-      <svg class="pomo-ring" viewBox="0 0 120 120">
-        <circle class="pomo-ring-bg"  cx="60" cy="60" r="52"/>
-        <circle class="pomo-ring-fg" id="pomoRingFg" cx="60" cy="60" r="52"/>
-      </svg>
-      <div class="pomo-time-center">
-        <div class="pomo-time" id="pomoTime">25:00</div>
-        <div class="pomo-phase" id="pomoPhase">准备开始</div>
-      </div>
-    </div>
-
-    <!-- Session dots -->
-    <div class="pomo-dots" id="pomoDots"></div>
-
-    <!-- Controls -->
-    <div class="pomo-controls">
-      <button class="pomo-btn pomo-btn-main" id="pomoStartBtn" onclick="Pomodoro.toggle()">开始</button>
-      <button class="pomo-btn pomo-btn-skip"  onclick="Pomodoro.skip()">跳过</button>
-      <button class="pomo-btn pomo-btn-reset" onclick="Pomodoro.reset()">重置</button>
-    </div>
-
-    <!-- Settings -->
-    <div class="pomo-settings">
-      <div class="pomo-setting-row">
-        <span class="pomo-setting-label">专注时长</span>
-        <div class="pomo-setting-ctrl">
-          <button onclick="Pomodoro.adjustFocus(-5)">−</button>
-          <span id="pomoFocusVal">25</span>分钟
-          <button onclick="Pomodoro.adjustFocus(5)">＋</button>
-        </div>
-      </div>
-      <div class="pomo-setting-row">
-        <span class="pomo-setting-label">短休息</span>
-        <div class="pomo-setting-ctrl">
-          <button onclick="Pomodoro.adjustBreak(-1)">−</button>
-          <span id="pomoBreakVal">5</span>分钟
-          <button onclick="Pomodoro.adjustBreak(1)">＋</button>
-        </div>
-      </div>
-      <div class="pomo-setting-row">
-        <span class="pomo-setting-label">长休息（4轮后）</span>
-        <div class="pomo-setting-ctrl">
-          <button onclick="Pomodoro.adjustLong(-5)">−</button>
-          <span id="pomoLongVal">15</span>分钟
-          <button onclick="Pomodoro.adjustLong(5)">＋</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Log -->
-    <div id="pomoLog" class="pomo-log"></div>
-  </div>
-</div>
 
 <!-- Scripts -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -307,7 +237,6 @@
 <script src="ai.js"></script>
 <script src="stats.js"></script>
 <script src="calview.js"></script>
-<script src="pomodoro.js"></script>
 <script src="review.js"></script>
 <script src="app.js"></script>
 </body>
