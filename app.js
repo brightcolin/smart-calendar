@@ -97,6 +97,17 @@ const UI = {
   /* ── Today events ── */
   renderTodayEvents(events) {
     App.todayEvents = events;
+    // Sync local mirror so stats/AI-context fallback stays fresh
+    let dirty = false;
+    events.forEach(e => {
+      const local = App.store.tasks.find(t => t.gcalId === e.gcalId);
+      if (local && (local.done !== e.done || local.actualMins !== e.actualMins)) {
+        local.done = e.done;
+        local.actualMins = e.actualMins;
+        dirty = true;
+      }
+    });
+    if (dirty) App.saveState();
     const el = document.getElementById('todayEventList');
     if (!events.length) {
       el.innerHTML = '<div class="empty"><div class="empty-icon">◌</div>今天日历中暂无事件<br><span style="font-size:12px;margin-top:4px;display:block;color:var(--text3)">在「对话」页用自然语言创建</span></div>';
