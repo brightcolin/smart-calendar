@@ -135,7 +135,8 @@ const UI = {
     const today = new Date().toISOString().slice(0, 10);
     let plan;
     try { plan = JSON.parse(localStorage.getItem('sca_review') || 'null'); } catch(e) {}
-    const tasks = (plan?.tasks || []).filter(t => t.date === today);
+    // Exclude tasks already synced to Calendar — they show in the Calendar events section
+    const tasks = (plan?.tasks || []).filter(t => t.date === today && !t.gcalId);
     if (!tasks.length) { el.style.display = 'none'; return; }
 
     const done    = tasks.filter(t => t.done).length;
