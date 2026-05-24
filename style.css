@@ -342,7 +342,9 @@ select.form-input option { background: var(--bg3); }
 .rv-bar-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .rv-bar-track { flex:1; height:8px; background:var(--bg4); border-radius:4px; overflow:hidden; }
 .rv-bar-fill { height:100%; border-radius:4px; transition:width 0.4s ease; }
-.rv-bar-val { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; width:68px; text-align:right; flex-shrink:0; }
+.rv-bar-meta { display:flex; flex-direction:column; align-items:flex-end; width:80px; flex-shrink:0; gap:1px; }
+.rv-bar-val { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; }
+.rv-bar-countdown { font-size:10px; font-family:'DM Mono',monospace; }
 
 /* ── Filters ── */
 .rv-filters { display:flex; gap:6px; margin-bottom:10px; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch; }
