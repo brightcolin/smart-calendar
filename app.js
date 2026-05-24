@@ -87,7 +87,7 @@ const UI = {
     document.getElementById('page-' + name).classList.add('active');
     if (btn) btn.classList.add('active');
     if (name === 'stats')    Stats.render();
-    if (name === 'today')    Cal.loadTodayEvents();
+    if (name === 'today')    { Cal.loadTodayEvents(); this.renderTodayReview(); }
     if (name === 'cal')      CalView.render();
     if (name === 'review')   Review.render();
     if (name === 'settings') UI.loadSettings();
@@ -126,6 +126,40 @@ const UI = {
       html += complete.map(e => eventCard(e)).join('');
     }
     el.innerHTML = html;
+    this.renderTodayReview();
+  },
+
+  renderTodayReview() {
+    const el = document.getElementById('todayReviewSection');
+    if (!el) return;
+    const today = new Date().toISOString().slice(0, 10);
+    let plan;
+    try { plan = JSON.parse(localStorage.getItem('sca_review') || 'null'); } catch(e) {}
+    const tasks = (plan?.tasks || []).filter(t => t.date === today);
+    if (!tasks.length) { el.style.display = 'none'; return; }
+
+    const done    = tasks.filter(t => t.done).length;
+    const pending = tasks.filter(t => !t.done);
+    const compl   = tasks.filter(t => t.done);
+    let html = '<div class="section-title">今日复习任务 ' + done + '/' + tasks.length + '</div>';
+    [...pending, ...compl].forEach(task => {
+      const s = (typeof Review !== 'undefined' && Review.SUBJECT_MAP?.[task.subjectId]) || {};
+      html += '<div class="rv-today-item' + (task.done ? ' done' : '') + '">'
+        + '<button class="rv-today-check' + (task.done ? ' checked' : '') + '" onclick="UI.toggleTodayReview(' + task.id + ')">'
+        + (task.done ? '✓' : '') + '</button>'
+        + '<span class="rv-today-dot" style="background:' + (s.color || '#888') + '"></span>'
+        + '<div class="rv-today-body">'
+        + '<div class="rv-today-name">' + esc(task.name) + '</div>'
+        + '<div class="rv-today-meta">' + task.start + '–' + task.end + (s.short ? ' · ' + s.short : '') + '</div>'
+        + '</div></div>';
+    });
+    el.style.display = 'block';
+    el.innerHTML = html;
+  },
+
+  async toggleTodayReview(id) {
+    await Review.toggleDone(id);
+    this.renderTodayReview();
   },
 
   /* ── Modals ── */
