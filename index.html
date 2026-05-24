@@ -79,6 +79,12 @@
 
     <!-- ── Chat (default page) ── -->
     <div class="page active" id="page-add">
+      <div class="page-toolbar" style="padding-top:0">
+        <span></span>
+        <div class="toolbar-actions">
+          <button class="btn btn-sm" onclick="AI.clearChat()" title="清空对话记录，重新开始">清空记录</button>
+        </div>
+      </div>
       <div id="chatArea" class="chat-area"></div>
       <div id="confirmArea"></div>
       <div class="chat-input-wrap">
