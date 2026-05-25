@@ -95,6 +95,7 @@ const UI = {
 
   /* ── Today events ── */
   renderTodayEvents(events) {
+    events = [...events].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
     App.todayEvents = events;
     // Sync local mirror so stats/AI-context fallback stays fresh
     let dirty = false;
