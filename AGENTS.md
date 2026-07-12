@@ -102,18 +102,20 @@ Important web-app localStorage keys:
 | `sca_accounts` | Encrypted account/token data |
 | `sca_active` | Active account email |
 | `sca_dskey` | Encrypted DeepSeek API key |
-| `sca_review` | Exam review plan |
+| `sca_review` | Local exam subjects and review tasks |
 
 ## Main customization points
 
 - `app.js`: `GOOGLE_CLIENT_ID` and top-level application state.
-- `ai.js`: `buildSystemPrompt()` for schedule, routines, and secretary rules.
+- `ai.js`: `buildSystemPrompt()` for generic scheduling behavior; personal
+  planning rules come from `sca_cfg.planningRules` and must not be hardcoded.
 - `calendar.js`: `TAG_COLOR` and `TAG_HEX` for tag mappings.
-- `review.js`: `SUBJECTS` and `generateDefaultPlan()` for exam planning.
+- `review.js`: locally stored subjects/tasks, generic plan generation, and
+  private JSON import/export.
 
-The checked-in review schedule contains historical fixed dates. Do not silently
-reinterpret or regenerate them during unrelated work; update them only as part
-of an explicit review-plan task.
+Public source must not contain real personal timetables, routines, exam dates,
+or study tasks. Keep local backups under `/private/` or in ignored personal
+notes, and never force-add those paths to Git.
 
 ## Editing expectations
 
@@ -137,3 +139,5 @@ There is currently no automated test or lint suite. After changes:
 5. For user-visible HTML, test special characters and confirm output is escaped.
 6. If tags, event titles, or shared Calendar behavior changed, also assess the
    effect on `../calendar-widget` and report any follow-up needed there.
+7. For review/settings changes, verify local JSON import/export and confirm a
+   fresh browser profile starts without personal subjects or planning rules.
