@@ -178,6 +178,18 @@
       </div>
 
       <div class="card">
+        <div class="card-label">个人规划规则</div>
+        <div class="settings-sub" style="margin-bottom:10px">课程、作息、保护时段和任务优先级只保存在当前浏览器，不写入源码。</div>
+        <textarea class="form-input" id="planningRules" rows="8" maxlength="6000"
+          placeholder="例如：工作日 12:00–13:00 不安排任务；晚上适合深度学习；本月优先准备考试。"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn" onclick="Review.openImport()">导入个人配置</button>
+          <button class="btn" onclick="Review.exportData()">导出个人配置</button>
+        </div>
+        <div class="security-note">导出的 JSON 可能包含私人日程，请勿上传到公开仓库。</div>
+      </div>
+
+      <div class="card">
         <div class="card-label">每日回顾</div>
         <div class="settings-row">
           <div><div class="settings-lbl">回顾时间</div></div>

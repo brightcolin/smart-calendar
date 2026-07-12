@@ -14,6 +14,7 @@ const App = {
     cfg: {
       reviewTime: '23:30', defReminder: 10, defReminderMethod: 'popup',
       activeCalId: 'primary', activeCalName: '主日历',
+      planningRules: '',
     }
   },
 
@@ -251,6 +252,7 @@ const UI = {
     document.getElementById('reviewTime').value        = cfg.reviewTime  || '23:30';
     document.getElementById('defReminder').value       = cfg.defReminder || 10;
     document.getElementById('defReminderMethod').value = cfg.defReminderMethod || 'popup';
+    document.getElementById('planningRules').value     = cfg.planningRules || '';
     const key = await AI.loadKey();
     const keyEl = document.getElementById('apiKey');
     if (key && keyEl) keyEl.placeholder = '已保存（输入新值可更新）';
@@ -262,6 +264,7 @@ const UI = {
     App.store.cfg.reviewTime        = document.getElementById('reviewTime').value;
     App.store.cfg.defReminder       = Math.min(120, Math.max(0, parseInt(document.getElementById('defReminder').value) || 10));
     App.store.cfg.defReminderMethod = document.getElementById('defReminderMethod').value;
+    App.store.cfg.planningRules     = document.getElementById('planningRules').value.trim();
     App.saveState();
     this.toast('设置已保存', 'success');
   },
