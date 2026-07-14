@@ -2,6 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![JavaScript](https://img.shields.io/badge/JavaScript-ES6%2B-F7DF1E?logo=javascript&logoColor=000)
+![Status: Personal Testing](https://img.shields.io/badge/status-personal%20testing-orange.svg)
+[![Live Demo](https://img.shields.io/badge/demo-GitHub%20Pages-2ea44f?logo=github)](https://brightcolin.github.io/smart-calendar/)
+
 A browser-based Google Calendar assistant with natural-language event management, intelligent scheduling, calendar views, review planning, and time statistics. It is built with plain HTML, CSS, and JavaScript—without a framework, build step, or backend server.
 
 > This project is currently in personal testing. While the Google OAuth consent screen remains in testing mode, only accounts added as test users can sign in.

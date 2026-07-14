@@ -2,6 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![JavaScript](https://img.shields.io/badge/JavaScript-ES6%2B-F7DF1E?logo=javascript&logoColor=000)
+![Status: Personal Testing](https://img.shields.io/badge/status-personal%20testing-orange.svg)
+[![Live Demo](https://img.shields.io/badge/demo-GitHub%20Pages-2ea44f?logo=github)](https://brightcolin.github.io/smart-calendar/)
+
 一个直接运行在浏览器中的 Google Calendar 助手，支持自然语言事件管理、智能排期、日历视图、复习计划和时间统计。项目使用原生 HTML、CSS 和 JavaScript，无框架、无打包步骤、无后端服务器。
 
 > 当前处于个人测试阶段。Google OAuth 测试模式下，只有加入测试用户列表的账号可以登录。
