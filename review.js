@@ -297,10 +297,11 @@ reason尽量简短。只输出JSON数组，不要其他文字。如果某些任�
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + dsKey },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 8000,
           temperature: 0.15,
+          thinking: { type: 'disabled' },
         }),
       });
       const d = await r.json();

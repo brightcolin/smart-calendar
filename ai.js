@@ -8,7 +8,7 @@
 
 const AI = (() => {
   const DS_BASE  = 'https://api.deepseek.com/v1/chat/completions';
-  const DS_MODEL = 'deepseek-chat';
+  const DS_MODEL = 'deepseek-v4-flash';
 
   let chatHistory = [];
   let lastCreated = null;
@@ -38,7 +38,13 @@ const AI = (() => {
     const r = await fetch(DS_BASE, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + dsKey },
-      body:    JSON.stringify({ model: DS_MODEL, messages: all, max_tokens: maxTokens, temperature: 0.2 }),
+      body: JSON.stringify({
+        model: DS_MODEL,
+        messages: all,
+        max_tokens: maxTokens,
+        temperature: 0.2,
+        thinking: { type: 'disabled' },
+      }),
     });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));

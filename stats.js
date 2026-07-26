@@ -210,7 +210,7 @@ const Stats = (() => {
         method: 'POST',
         headers: { 'Content-Type':'application/json', 'Authorization':'Bearer ' + dsKey },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
           messages: [
             { role: 'system', content: '你是时间管理专家，用中文生成简洁周报，300字以内，包含：完成情况、按#标签的时间分布、重复活动汇总分析、预估偏差规律、下周改进建议。' },
             { role: 'user', content:
@@ -224,6 +224,7 @@ const Stats = (() => {
           ],
           max_tokens: 700,
           temperature: 0.5,
+          thinking: { type: 'disabled' },
         })
       });
       const d = await r.json();
