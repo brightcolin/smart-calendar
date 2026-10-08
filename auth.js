@@ -13,6 +13,7 @@ const Auth = (() => {
   let tokenClient = null;
   let activeAccountId = null;  // email used as ID
   let tokenRefreshTimer = null;
+  let tokenRequestIsSilent = false;
   const TOKEN_TTL = 55 * 60 * 1000;
 
   // ── Storage keys ──
@@ -111,16 +112,21 @@ const Auth = (() => {
   }
 
   /* ══ Token auto-refresh (silent, user never sees login prompt) ══ */
-  function scheduleRefresh(email) {
+  function scheduleRefresh(email, delay = TOKEN_TTL) {
     if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
-    // Silently refresh at 50 min (before 60-min expiry)
-    tokenRefreshTimer = setTimeout(() => silentRefresh(email), TOKEN_TTL);
+    // Refresh before expiry, accounting for the age of a restored token.
+    tokenRefreshTimer = setTimeout(() => silentRefresh(email), Math.max(0, delay));
   }
 
   async function silentRefresh(email) {
     if (!tokenClient) return;
-    // Use prompt:'none' for silent refresh — no popup, no user interaction
-    tokenClient.requestAccessToken({ prompt: 'none', login_hint: email });
+    tokenRequestIsSilent = true;
+    try {
+      tokenClient.requestAccessToken({ prompt: 'none', login_hint: email });
+    } catch(e) {
+      tokenRequestIsSilent = false;
+      document.getElementById('tokenWarn').classList.add('visible');
+    }
   }
 
   function clearRefresh() {
@@ -136,6 +142,10 @@ const Auth = (() => {
       client_id: GOOGLE_CLIENT_ID,
       scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
       callback: async (resp) => {
+        // A saved account also exists during re-login; only an actual
+        // background refresh may skip the post-login UI transition.
+        const silent = tokenRequestIsSilent;
+        tokenRequestIsSilent = false;
         if (resp.error) {
           // Silent refresh failed (e.g. user revoked) → show warning
           if (resp.error === 'interaction_required' || resp.error === 'login_required') {
@@ -145,20 +155,23 @@ const Auth = (() => {
           }
           return;
         }
-        const isReturning = !!activeAccountId;
-        await onTokenReceived(resp.access_token, isReturning);
+        try {
+          await onTokenReceived(resp.access_token, silent);
+        } catch(e) {
+          UI.toast('登录未完成：' + e.message, 'error');
+        }
       }
     });
   }
 
   async function onTokenReceived(token, silent = false) {
-    let userInfo;
-    try {
-      const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      userInfo = await r.json();
-    } catch(e) { if (!silent) UI.toast('获取用户信息失败', 'error'); return; }
+    if (!token) throw new Error('Google 未返回登录凭据，请重试');
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!r.ok) throw new Error('获取用户信息失败（' + r.status + '），请重新登录');
+    const userInfo = await r.json();
+    if (!userInfo.email) throw new Error('未获取到邮箱信息，请重新授权');
 
     const account = {
       email:   userInfo.email,
@@ -184,6 +197,8 @@ const Auth = (() => {
   /* ══ Public API ══ */
   async function signIn() {
     if (!tokenClient) { UI.toast('正在初始化，请稍候', 'info'); return; }
+    clearRefresh();
+    tokenRequestIsSilent = false;
     tokenClient.requestAccessToken();
   }
 
@@ -223,7 +238,8 @@ const Auth = (() => {
   async function switchAccount(email) {
     const account = await getAccount(email);
     if (!account) return;
-    if (!account.token) {
+    const age = Date.now() - (account.tokenAt || 0);
+    if (!account.token || age >= TOKEN_TTL) {
       // Need to re-login for this account
       activeAccountId = email;
       localStorage.setItem(ACTIVE_KEY, email);
@@ -233,6 +249,7 @@ const Auth = (() => {
     }
     activeAccountId = email;
     localStorage.setItem(ACTIVE_KEY, email);
+    scheduleRefresh(email, TOKEN_TTL - age);
     UI.closeModal('accountModal');
     UI.toast('已切换到：' + account.name, 'success');
     await App.onLogin();
@@ -258,17 +275,17 @@ const Auth = (() => {
       activeAccountId = saved;
       const account = await getAccount(saved);
       if (account?.token) {
-        // Check if token is still fresh (< 50 min old)
+        // Only restore sessions whose saved token is still fresh.
         const age = Date.now() - (account.tokenAt || 0);
         if (age < TOKEN_TTL) {
-          scheduleRefresh(saved);
+          scheduleRefresh(saved, TOKEN_TTL - age);
           return true; // token still valid
         }
-        // Token may be expired — attempt silent refresh
-        scheduleRefresh(saved); // will fire immediately after a tick
-        return true; // still show app; silentRefresh will fix token in background
+        // An expired token requires a user-triggered sign-in. Keep the
+        // saved account so it can still be selected from the login screen.
       }
     }
+    clearRefresh();
     return false;
   }
 
